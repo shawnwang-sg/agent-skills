@@ -1,6 +1,8 @@
-# Claude Skills
+# Agent Skills
 
-Personal collection of Claude Code skills.
+Personal collection of skills for AI coding agents — Claude Code, Codex, Gemini, and others.
+
+Each skill is a self-contained folder with a `SKILL.md` describing when to trigger it and how to run it. Drop the folder into your agent's skills directory (path varies by tool) and the agent will pick it up.
 
 ## Skills
 
@@ -10,22 +12,24 @@ Personal collection of Claude Code skills.
 
 ## Install
 
-Copy any skill folder into your Claude skills directory:
+### Claude Code
+
+Copy or symlink any skill into `~/.claude/skills/`:
 
 ```bash
-# macOS / Linux / Git Bash
+# macOS / Linux / Git Bash — copy
 cp -r subtitle-cleanup ~/.claude/skills/
 
-# Windows PowerShell
-Copy-Item -Recurse subtitle-cleanup $env:USERPROFILE\.claude\skills\
-```
-
-Or symlink so edits in this repo take effect immediately:
-
-```bash
-# macOS / Linux / Git Bash
+# macOS / Linux / Git Bash — symlink (edits in this repo take effect immediately)
 ln -s "$(pwd)/subtitle-cleanup" ~/.claude/skills/subtitle-cleanup
 
-# Windows (Developer Mode or admin shell)
-mklink /D "%USERPROFILE%\.claude\skills\subtitle-cleanup" "C:\Code\claude-skills\subtitle-cleanup"
+# Windows PowerShell — copy
+Copy-Item -Recurse subtitle-cleanup $env:USERPROFILE\.claude\skills\
+
+# Windows — directory junction (no admin needed)
+cmd /c mklink /J "%USERPROFILE%\.claude\skills\subtitle-cleanup" "C:\Code\agent-skills\subtitle-cleanup"
 ```
+
+### Other agents
+
+Most agent frameworks accept the same `SKILL.md` format. Point your agent's skills/prompts directory at this repo (or a subfolder) and adjust the trigger description if needed.
