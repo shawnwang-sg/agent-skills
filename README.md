@@ -9,13 +9,21 @@ Each skill is a self-contained folder with a `SKILL.md` describing when to trigg
 ```
 agent-skills/
 ├── <skill-name>/        ← one folder per skill, each with SKILL.md
-│   └── SKILL.md
+│   ├── SKILL.md
+│   └── ...              ← skill-private scripts live here
+├── tools/               ← cross-skill utilities (OCR, format converters, ...)
+│   └── README.md
 ├── glossary/            ← shared domain term lists used by skills (太极, 网球, ...)
 │   ├── README.md
-│   ├── tools/           ← helpers for building glossaries (.qcel parser, etc.)
+│   ├── tools/           ← glossary-specific helpers (.qcel parser, etc.)
 │   └── <domain>.md
 └── README.md
 ```
+
+**Three tiers of tooling**:
+- **Skill-private** (inside `<skill>/`) — only that skill ever runs it
+- **Subsystem-specific** (inside `<subsystem>/tools/`) — e.g. glossary builders
+- **Cross-skill** (top-level `tools/`) — anything multiple skills might call
 
 ## Skills
 
