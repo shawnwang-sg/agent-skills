@@ -6,11 +6,7 @@ Cross-skill utilities. If a tool would only ever be used by **one** skill, put i
 
 | Tool | Purpose | Usage | Deps |
 | --- | --- | --- | --- |
-| _(empty — add tools below)_ | | | |
-
-<!-- Example row, uncomment when you add the first tool:
-| [ocr_image.py](./ocr_image.py) | Extract Chinese text from a PNG/JPG using PaddleOCR | `python tools/ocr_image.py <image>` → text on stdout | paddleocr |
--->
+| [subtitle-glossary/](./subtitle-glossary) | Domain term lists for `subtitle-cleanup` (太极, ...). Includes `parse_qcel.py` builder for Sogou/QQ IME dicts. | See [subtitle-glossary/README.md](./subtitle-glossary/README.md) | stdlib |
 
 ## Conventions
 

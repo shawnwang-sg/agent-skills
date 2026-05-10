@@ -8,15 +8,15 @@ Each skill is a self-contained folder with a `SKILL.md` describing when to trigg
 
 ```
 agent-skills/
-├── <skill-name>/        ← one folder per skill, each with SKILL.md
+├── <skill-name>/                  ← one folder per skill, each with SKILL.md
 │   ├── SKILL.md
-│   └── ...              ← skill-private scripts live here
-├── tools/               ← cross-skill utilities (OCR, format converters, ...)
-│   └── README.md
-├── glossary/            ← shared domain term lists used by skills (太极, 网球, ...)
+│   └── ...                        ← skill-private scripts live here
+├── tools/                         ← cross-skill + subsystem utilities
 │   ├── README.md
-│   ├── tools/           ← glossary-specific helpers (.qcel parser, etc.)
-│   └── <domain>.md
+│   └── subtitle-glossary/         ← domain term lists for subtitle-cleanup
+│       ├── README.md
+│       ├── parse_qcel.py          ← builder: .qcel → glossary
+│       └── <domain>.md            ← 太极, 网球, ...
 └── README.md
 ```
 
@@ -29,47 +29,15 @@ agent-skills/
 
 | Skill | Description |
 | --- | --- |
-| [subtitle-cleanup](./subtitle-cleanup) | Process SRT/VTT/TXT/LRC subtitles. Mode A cleans into a paragraph 演讲文稿 `.docx`; Mode B merges fragmented timestamped lines into coherent sentences for English study. Loads matching `glossary/<domain>.md` when the user names a domain. |
+| [subtitle-cleanup](./subtitle-cleanup) | Process SRT/VTT/TXT/LRC subtitles. Mode A cleans into a paragraph 演讲文稿 `.docx`; Mode B merges fragmented timestamped lines into coherent sentences for English study. Loads matching `tools/subtitle-glossary/<domain>.md` when the user names a domain. |
 
-## Glossary
+## Glossaries
 
-Domain-specific term lists in [`glossary/`](./glossary) prime skills with the right vocabulary so they can recognize canonical terms and auto-fix common ASR transcription errors. Invoke by mentioning the domain when calling a skill:
+Domain term lists live under [`tools/subtitle-glossary/`](./tools/subtitle-glossary). They prime `subtitle-cleanup` (and any future skill needing domain context) so it can recognize canonical terms and auto-fix common ASR transcription errors. Invoke by mentioning the domain when calling a skill:
 
 > 合并字幕，主题是太极
 
-The skill loads `glossary/太极.md` and uses it during cleanup. Each glossary file has three sections:
-
-- **一句话上下文** — primer for the model
-- **专有名词（保持原样）** — canonical terms (don't "correct" these)
-- **易错（ASR 错 → 正字）** — known transcription errors and their fixes
-
-Currently shipped glossaries:
-
-| Domain | File | Sources |
-| --- | --- | --- |
-| 太极拳 | [glossary/太极.md](./glossary/太极.md) | QQ 输入法 .qcel 词库 + 百度百科·杨氏太极拳 + 实际校对积累 |
-
-### Tools
-
-Helpers in [`glossary/tools/`](./glossary/tools) for building glossaries from common sources:
-
-| Tool | Purpose |
-| --- | --- |
-| [parse_qcel.py](./glossary/tools/parse_qcel.py) | Parse Sogou `.scel` / QQ `.qcel` Chinese IME cell-dictionary files. Drop the binary in, get out `<word>\t<pinyin>` per line. Useful starting point — Chinese IME stores hundreds of curated domain terms per file. |
-
-Run it with:
-
-```bash
-python glossary/tools/parse_qcel.py path/to/dict.qcel
-# writes path/to/dict.glossary.txt
-```
-
-### Adding a new domain
-
-1. Find a starting source — IME dictionary (`.scel` / `.qcel`), book glossary/index (OCR if needed), or Wikipedia/Baidu Baike page
-2. Extract terms (use `tools/parse_qcel.py` for IME files; OCR + manual for books)
-3. Create `glossary/<domain>.md` following the three-section template in [glossary/README.md](./glossary/README.md)
-4. As you use it, append discovered ASR errors to the "易错" section
+The skill loads `tools/subtitle-glossary/太极.md`. Full docs and the new-glossary recipe live in [tools/subtitle-glossary/README.md](./tools/subtitle-glossary/README.md).
 
 ## Install
 

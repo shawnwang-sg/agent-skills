@@ -8,6 +8,15 @@ description: Process SRT/VTT/TXT subtitles in one of two modes. (A) Transcript m
 ## ⚠️ HARD TRIGGER — read first
 If the user's message contains the four characters **「合并字幕」**, you MUST run this skill's full workflow end-to-end (Step 0 → B5 / A6). No shortcuts, no manually merging in your head, no skipping B1/B2 block-count checks, no writing the output without going through the documented Bash steps. This applies even if the file is small enough that you "could just do it" — the user has explicitly opted into the workflow by typing those four characters. Treat it as non-negotiable.
 
+## Domain glossary (load if user names a domain)
+If the user mentions a domain (e.g. "主题是太极", "topic: tennis", "网球内容"), **before starting the workflow**, look for `<repo>/tools/subtitle-glossary/<domain>.md` and read it. The glossary file has three sections:
+
+- **一句话上下文** — primer; use to interpret ambiguous terms.
+- **专有名词（保持原样）** — these are correct as-written; do NOT "fix" them.
+- **易错（ASR 错 → 正字）** — apply these substitutions during cleanup, both in Mode A (transcript) and Mode B (learning, where it counts as a permitted typo correction since the source is verifiably wrong).
+
+If the named glossary doesn't exist, proceed without it but flag that to the user at the end so they know to build one. The skill repo location is typically `~/.claude/skills/subtitle-cleanup` → resolve `../../tools/subtitle-glossary/<domain>.md`, or use the user-provided absolute path if symlinked from elsewhere (e.g. `C:\Code\agent-skills\tools\subtitle-glossary\<domain>.md`).
+
 This skill has **two modes**. Always run Step 0 first to decide which.
 
 - **Mode A — Transcript**: clean into a paragraph 演讲文稿 `.docx`. Removes disfluencies, fixes punctuation, allows minor cleanup.
