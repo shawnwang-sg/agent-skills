@@ -30,6 +30,7 @@ agent-skills/
 | Skill | Description |
 | --- | --- |
 | [subtitle-cleanup](./subtitle-cleanup) | Process SRT/VTT/TXT/LRC subtitles. Mode A cleans into a paragraph 演讲文稿 `.docx`; Mode B merges fragmented timestamped lines into coherent sentences for English study. Loads matching `tools/subtitle-glossary/<domain>.md` when the user names a domain. |
+| [snippet-collection](./snippet-collection) | Turn externally collected text snippets (Douyin/小红书 image posts, handwriting, screenshots, copied fragments) into a clean 原文集锦 `.txt`: parallel image OCR, strip tags/watermarks/accounts, compact punctuated paragraphs with quotes kept verbatim, topic categories with a TOC. |
 
 ## Glossaries
 
