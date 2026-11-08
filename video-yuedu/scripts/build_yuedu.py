@@ -179,7 +179,8 @@ def main():
     for n, f in enumerate(tabs):
         cnt = sum(len(v) for t in keep.get(f, {}).values() for v in t.values())
         P.append(f"<button data-tab='t{n}' class='{'on' if n == 0 else ''}'>{f}<span>{cnt or '待整理'}</span></button>")
-    P.append(f"<button data-tab=tlow>待处理清单<span>{len(low) + len(move)}</span></button><button data-tab=tqc>质检</button></nav>")
+    P.append(f"<button data-tab=tlow>待处理清单<span>{len(low) + len(move)}</span></button>"
+             "<button data-tab=tbin>回收站<span id=bincnt>0</span></button><button data-tab=tqc>质检</button></nav>")
 
     for n, f in enumerate(tabs):
         cats = keep.get(f, {})
@@ -187,14 +188,17 @@ def main():
         if not cats:
             P.append("<p class=empty>这个分类还没转写完，转好后每满 100 条会整理进来。</p></section>")
             continue
-        # 左侧固定导航：大类 → 小主题
+        # 左侧固定导航：大类 → 小主题 → 每篇标题（点了直接跳到那篇）
         P.append("<div class=layout><aside class=side><div class=side-in>")
         for cat in sorted(cats, key=cat_key):
             topics = cats[cat]
             total = sum(len(v) for v in topics.values())
             P.append(f"<div class=tc><a href='#{f}-{html.escape(cat)}' class=tcat>{html.escape(cat)}<span>{total}</span></a><div class=ttop>")
             for t in sorted(topics, key=lambda t: -len(topics[t])):
-                P.append(f"<a href='#{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}<span>{len(topics[t])}</span></a>")
+                P.append(f"<a href='#{f}-{html.escape(cat)}-{html.escape(t)}' class=tt>{html.escape(t)}<span>{len(topics[t])}</span></a><div class=tart>")
+                for x in sorted(topics[t], key=lambda x: x["id"]):
+                    P.append(f"<a href='#a{x['id']}' data-id='{x['id']}'>{html.escape(re.sub(r'[*]', '', x.get('theme') or '（无题）'))}</a>")
+                P.append("</div>")
             P.append("</div></div>")
         P.append(f"</div></aside><div class=content><div class=tabplay>「{html.escape(f)}」全部{PLAYBTN}<label class=wi><input type=checkbox class=withimg checked> 连播带图文</label></div>")
         for cat in sorted(cats, key=cat_key):
@@ -205,8 +209,8 @@ def main():
                 for x in sorted(topics[t], key=lambda x: x["id"]):
                     src = html.escape(x["_author"] or "佚名")
                     link = media_link(x, " · ")
-                    P.append(f"<article data-s='{html.escape((x.get('theme', '') + x.get('gold', '') + x['_author']).lower())}'>"
-                             f"<h5>{inline(x.get('theme', ''))}</h5><div class=src>—— {src}{link}</div>"
+                    P.append(f"<article id='a{x['id']}' data-id='{x['id']}' data-s='{html.escape((x.get('theme', '') + x.get('gold', '') + x['_author']).lower())}'>"
+                             f"<h5>{inline(x.get('theme', ''))}</h5><div class=src>—— {src}{link} · {DELBTN}</div>"
                              f"<div class=gold>{inline(x.get('gold', ''))}</div><div class=body>{render(x.get('body', ''))}</div></article>")
         P.append("</div></div></section>")
 
@@ -250,7 +254,21 @@ def main():
     for x in over:
         P.append(f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('theme', ''))}</td><td>{html.escape(x['_author'])}</td><td>{x['_pct']:.0f}%</td>"
                  f"<td>{html.escape(x.get('note') or '')}</td></tr>")
-    P.append("</table></section></main>" + JS)
+    P.append("</table></section>")
+    # 回收站：点「删除」的条目（阅读篇目和待处理清单都算）挪到这里，可恢复；不删文件。
+    # 删除记录存在浏览器本机（localStorage，按页面路径分开），「导出清单」可存成 JSON；
+    # 把它放到 <库>/_yuedu/deleted.json（{"ids": [...]}），重新生成页面时会预先放进回收站。
+    pre = []
+    if (WORK / "deleted.json").exists():
+        try:
+            pre = [int(i) for i in json.loads((WORK / "deleted.json").read_text(encoding="utf-8")).get("ids", [])]
+        except Exception as e:
+            print("⚠ deleted.json 读不了：", e)
+    P.append("<section id=tbin class=tab><h2>回收站</h2><p class=note>在阅读页或待处理清单里点「删除」的条目都在这里，原文件不动，"
+             "点「恢复」放回原处。删除记录存在这台电脑的浏览器里；点「导出清单」存成文件，交给 Claude 放到 "
+             f"<code>{html.escape(str(WORK / 'deleted.json'))}</code>，以后重新生成页面也会保留。</p>"
+             "<p><button id=binexp class=del>导出清单</button></p><table id=bintab></table><p id=binempty class=empty>回收站是空的。</p></section>")
+    P.append(f"</main><script>const PRE_DEL={json.dumps(pre)},PAGE_NAME={json.dumps(lib.root.name)};</script>" + JS)
     out = Path(a.out) if a.out else lib.out
     out.write_text("".join(P), encoding="utf-8")
     print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 视频改动中位数 {avg:.1f}% · 超 15% {len(over)}/{len(vids)} 篇")
@@ -281,8 +299,11 @@ def media_link(x, prefix=""):
 
 def row(x):
     link = media_link(x)
-    return (f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('_folder', ''))}</td><td>{html.escape(x.get('theme') or '')}</td>"
-            f"<td>{html.escape(x.get('_author', ''))}</td><td>{html.escape(x.get('reason') or '')}</td><td>{link}</td></tr>")
+    return (f"<tr data-id='{x['id']}'><td>#{x['id']}</td><td>{html.escape(x.get('_folder', ''))}</td><td>{html.escape(x.get('theme') or '')}</td>"
+            f"<td>{html.escape(x.get('_author', ''))}</td><td>{html.escape(x.get('reason') or '')}</td><td>{link}</td><td>{DELBTN}</td></tr>")
+
+
+DELBTN = "<button class=del title=移到回收站（不删文件，可恢复）>删除</button>"
 
 
 CSS = """
@@ -292,12 +313,20 @@ CSS = """
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.95 "Noto Serif SC","Source Han Serif SC","Songti SC","SimSun",serif}
 main{max-width:1680px;margin:0 auto;padding:28px 32px 100px}a{color:var(--acc)}
 header{max-width:none}#q{max-width:560px}
-.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:40px;align-items:start}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:36px;align-items:start}
 .side{position:sticky;top:64px;max-height:calc(100vh - 76px);overflow-y:auto;padding:14px 4px 30px 0;font-size:15px;line-height:1.7;border-right:1px solid var(--line)}
 .side .tc{padding:8px 10px 8px 0;border-bottom:1px dashed var(--line)}.side .tc:last-child{border:0}
 .side .tcat{display:block;font-weight:600;color:var(--fg);text-decoration:none}.side .tcat:hover,.side .ttop a:hover{color:var(--acc)}
 .side .ttop{display:block;margin:2px 0 0 12px}.side .ttop a{display:block;color:var(--mut);text-decoration:none;padding:1px 0}
 .side span{color:var(--mut);font-size:12px;margin-left:6px;font-weight:400}
+.side .ttop a.tt{color:var(--fg);margin-top:4px}
+.side .tart{margin:0 0 4px 12px;border-left:1px solid var(--line);padding-left:8px}
+.side .tart a{font-size:13px;line-height:1.55;padding:2px 0;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side .tart a.cur{color:var(--acc)}
+button.del{border:1px solid var(--line);background:none;color:var(--mut);border-radius:999px;padding:0 9px;font:inherit;font-size:12px;line-height:1.7;cursor:pointer}
+button.del:hover{color:#b3261e;border-color:#b3261e}
+.gone{display:none!important}
+#bintab td:nth-child(2){white-space:nowrap;color:var(--mut)}
 .content h2:first-child{margin-top:8px}h2,h3{scroll-margin-top:70px}
 header h1{font-size:30px;letter-spacing:.06em;margin:0}.sub{color:var(--mut);font-size:14px;margin:4px 0 14px}
 #q{width:100%;padding:9px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--fg);font:inherit;font-size:15px}
@@ -368,7 +397,7 @@ document.addEventListener('click',e=>{const a=e.target.closest('a.play');if(!a)r
 function scope(b){const h=b.closest('h2,h3,.tabplay');let r=[];
  if(h.classList.contains('tabplay'))r=[...h.parentElement.querySelectorAll('article')];
  else{const stop=h.tagName==='H2'?['H2']:['H2','H3'];for(let n=h.nextElementSibling;n&&!stop.includes(n.tagName);n=n.nextElementSibling)if(n.tagName==='ARTICLE')r.push(n)}
- const img=withImg();return r.filter(a=>!a.classList.contains('hide')&&a.querySelector(img?'a.play':'a.play[data-video]'))}
+ const img=withImg();return r.filter(a=>!a.classList.contains('hide')&&!a.classList.contains('gone')&&a.querySelector(img?'a.play':'a.play[data-video]'))}
 // 「连播带图文」勾选：所有 tab 共用一个设置，记在本机
 function withImg(){const c=$('.withimg');return !c||c.checked}
 try{const s=localStorage.getItem('yuedu-withimg');if(s!==null)$$('.withimg').forEach(c=>c.checked=s==='1')}catch(e){}
@@ -386,6 +415,27 @@ pl.addEventListener('keydown',e=>{if(!list.length)return;
  if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();go(cur+1)}else if(e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();go(cur-1)}});
 let wt=0;pl.addEventListener('wheel',e=>{if(!list.length||e.target.closest('.imgs'))return;e.preventDefault();const t=Date.now();
  if(t-wt<700||Math.abs(e.deltaY)<30)return;wt=t;go(cur+(e.deltaY>0?1:-1))},{passive:false});
+// 回收站：删除 = 在原处隐藏 + 回收站里加一行；恢复 = 反过来。记录存 localStorage（按页面路径分开）+ 生成时的 PRE_DEL
+const DKEY='yuedu-del:'+location.pathname;let DEL=new Set(PRE_DEL.map(String));
+try{(JSON.parse(localStorage.getItem(DKEY)||'[]')).forEach(i=>DEL.add(String(i)))}catch(e){}
+const saveDel=()=>{try{localStorage.setItem(DKEY,JSON.stringify([...DEL]))}catch(e){}};
+const bintab=$('#bintab');
+function where(el){if(el.tagName==='ARTICLE'){const s=el.closest('section.tab'),b=$(`.tabs button[data-tab="${s.id}"]`);
+ return '阅读 · '+(b?b.firstChild.textContent:'')}return '待处理'}
+function binRow(el){const id=el.dataset.id;if(bintab.querySelector(`tr[data-id="${id}"]`))return;
+ const title=el.tagName==='ARTICLE'?el.querySelector('h5').textContent:(el.children[2]||{}).textContent||'';
+ const play=el.querySelector('a.play,a[target=_blank]');const tr=document.createElement('tr');tr.dataset.id=id;
+ tr.innerHTML=`<td>#${id}</td><td>${where(el)}</td><td></td><td></td><td><button class=del data-restore=1>恢复</button></td>`;
+ tr.children[2].textContent=title;if(play)tr.children[3].append(play.cloneNode(true));bintab.append(tr)}
+function els(id){return $$(`article[data-id="${id}"],#tlow tr[data-id="${id}"],.side .tart a[data-id="${id}"]`)}
+function refreshBin(){$('#bincnt').textContent=bintab.rows.length;$('#binempty').classList.toggle('gone',bintab.rows.length>0)}
+function del(id){DEL.add(id);els(id).forEach(e=>{if(e.tagName!=='A')binRow(e);e.classList.add('gone')});saveDel();refreshBin()}
+function restore(id){DEL.delete(id);els(id).forEach(e=>e.classList.remove('gone'));const r=bintab.querySelector(`tr[data-id="${id}"]`);if(r)r.remove();saveDel();refreshBin()}
+DEL.forEach(id=>{if(els(id).length)del(id)});refreshBin();
+document.addEventListener('click',e=>{const b=e.target.closest('button.del');if(!b||b.id==='binexp')return;e.preventDefault();
+ const id=b.closest('[data-id]').dataset.id;b.dataset.restore?restore(id):del(id)});
+$('#binexp').onclick=()=>{const blob=new Blob([JSON.stringify({page:PAGE_NAME,ids:[...DEL].map(Number)},null,1)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${PAGE_NAME}-回收站.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 pl.querySelector('.x').onclick=()=>pl.close();
 pl.addEventListener('click',e=>{if(e.target===pl)pl.close()});
 pl.addEventListener('close',()=>{clearTimeout(timer);stage.innerHTML='';const n=$('article.now');
