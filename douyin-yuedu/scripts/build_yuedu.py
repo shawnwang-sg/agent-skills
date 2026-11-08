@@ -194,7 +194,7 @@ def main():
             for t in sorted(topics, key=lambda t: -len(topics[t])):
                 P.append(f"<a href='#{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}<span>{len(topics[t])}</span></a>")
             P.append("</div></div>")
-        P.append(f"</div></aside><div class=content><div class=tabplay>「{html.escape(f)}」全部{PLAYBTN}</div>")
+        P.append(f"</div></aside><div class=content><div class=tabplay>「{html.escape(f)}」全部{PLAYBTN}<label class=wi><input type=checkbox class=withimg checked> 连播带图文</label></div>")
         for cat in sorted(cats, key=cat_key):
             topics = cats[cat]
             P.append(f"<h2 id='{f}-{html.escape(cat)}'>{html.escape(cat)}{PLAYBTN}</h2>")
@@ -330,7 +330,7 @@ table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin-
 .pp{display:inline-flex;gap:6px;margin-left:14px;vertical-align:middle}
 .pp button{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:999px;padding:1px 11px;font:inherit;font-size:13px;line-height:1.7;cursor:pointer;letter-spacing:0;font-weight:400}
 .pp button:hover{color:var(--acc);border-color:var(--acc)}
-.tabplay{font-size:14px;color:var(--mut);margin:8px 0 -18px}
+.tabplay{font-size:14px;color:var(--mut);margin:8px 0 -18px}.wi{margin-left:16px;cursor:pointer;white-space:nowrap}.wi input{vertical-align:middle;accent-color:var(--acc)}
 #pl .bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:#111;color:#ddd;font-size:14px}
 #pl.list .bar{display:flex}#pl.list video{max-height:calc(94vh - 46px)}#pl.list .imgs{max-height:calc(94vh - 46px)}
 #pl .bar .info{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -351,15 +351,24 @@ function load(a,onEnd){clearTimeout(timer);stage.innerHTML='';
  if(a.dataset.video){const v=document.createElement('video');v.controls=true;v.autoplay=true;v.src=a.dataset.video;
   v.onerror=()=>{stage.innerHTML='<p style="color:#fff;padding:30px">打不开这个本地视频，可能已被移动或删除。</p>';if(onEnd)timer=setTimeout(onEnd,1200)};
   if(onEnd)v.onended=onEnd;stage.append(v)}
- else{const box=document.createElement('div');box.className='imgs';JSON.parse(a.dataset.imgs).forEach(s=>{const i=new Image();i.src=s;i.loading='lazy';box.append(i)});stage.append(box);
-  if(onEnd)timer=setTimeout(onEnd,8000)}}
+ else{const box=document.createElement('div');box.className='imgs';const srcs=JSON.parse(a.dataset.imgs);srcs.forEach(s=>{const i=new Image();i.src=s;box.append(i)});stage.append(box);
+  if(onEnd){// 连播里的图文：按内容长短停 5～15 秒（每张约 5 秒、或按约 100px/秒滚完），期间自动往下滚，最多 15 秒就跳下一条
+   const t0=performance.now();
+   const step=now=>{if(!box.isConnected)return;const max=box.scrollHeight-box.clientHeight;
+    const ms=Math.min(15000,Math.max(5000,srcs.length*5000,max*10+2000)),p=Math.min(1,(now-t0)/ms);box.scrollTop=max*p;
+    if(p<1)requestAnimationFrame(step);else onEnd()};requestAnimationFrame(step)}}}
 document.addEventListener('click',e=>{const a=e.target.closest('a.play');if(!a)return;e.preventDefault();
  list=[];pl.classList.remove('list');load(a);if(!pl.open)pl.showModal()});
 // 连播 / 洗牌连播：按钮所在的整个 tab、大类（到下一个大类为止）或小主题（到下一个标题为止），跳过被搜索隐藏的
 function scope(b){const h=b.closest('h2,h3,.tabplay');let r=[];
  if(h.classList.contains('tabplay'))r=[...h.parentElement.querySelectorAll('article')];
  else{const stop=h.tagName==='H2'?['H2']:['H2','H3'];for(let n=h.nextElementSibling;n&&!stop.includes(n.tagName);n=n.nextElementSibling)if(n.tagName==='ARTICLE')r.push(n)}
- return r.filter(a=>!a.classList.contains('hide')&&a.querySelector('a.play'))}
+ const img=withImg();return r.filter(a=>!a.classList.contains('hide')&&a.querySelector(img?'a.play':'a.play[data-video]'))}
+// 「连播带图文」勾选：所有 tab 共用一个设置，记在本机
+function withImg(){const c=$('.withimg');return !c||c.checked}
+try{const s=localStorage.getItem('yuedu-withimg');if(s!==null)$$('.withimg').forEach(c=>c.checked=s==='1')}catch(e){}
+document.addEventListener('change',e=>{if(!e.target.classList.contains('withimg'))return;const v=e.target.checked;
+ $$('.withimg').forEach(c=>c.checked=v);try{localStorage.setItem('yuedu-withimg',v?'1':'0')}catch(e){}});
 function go(i){if(!list.length)return;if(i>=list.length){pl.close();return}cur=Math.max(0,i);const art=list[cur];
  $$('article.now').forEach(x=>x.classList.remove('now'));art.classList.add('now');
  info.textContent=`${cur+1} / ${list.length} · ${art.querySelector('h5').textContent}`;load(art.querySelector('a.play'),()=>go(cur+1))}
