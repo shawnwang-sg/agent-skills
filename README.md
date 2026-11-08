@@ -30,6 +30,9 @@ agent-skills/
 | Skill | Description |
 | --- | --- |
 | [subtitle-cleanup](./subtitle-cleanup) | Process SRT/VTT/TXT/LRC subtitles. Mode A cleans into a paragraph 演讲文稿 `.docx`; Mode B merges fragmented timestamped lines into coherent sentences for English study. Loads matching `tools/subtitle-glossary/<domain>.md` when the user names a domain. |
+| [quote-collection-publish](./quote-collection-publish) | 名言/摘抄 txt → 分类、去重、润色（附对照页）→ A4 双栏分页 PDF（一页一集）+ 每集 MP3 朗读（edge-tts）+ TXT + MOBI，四者分集分段一致。 |
+| [quote-wallpaper](./quote-wallpaper) | 名言 → 桌面文字壁纸，每条一张；右上角固定磨砂玻璃框（≤100 字横条框，101–300 字大框），字号自动取最大。 |
+| [jiayanchao-import](./jiayanchao-import) | 名言批量导入本地 growth-planner「嘉言钞」：宽松去重、长段拆短句、拆出处，写前自动备份。 |
 
 ## Glossaries
 
