@@ -35,6 +35,11 @@ def change_pct(raw, body):
     """视频转写稿和阅读稿的逐字差异比例。图文（识别图片文字后合并重排）不适合这样比，返回 None。"""
     if "【正文】" in raw or "【图1】" in raw:
         return None
+    try:  # 有的转写是繁体，转成简体再比，繁转简不算改动
+        import zhconv
+        raw = zhconv.convert(raw, "zh-cn")
+    except ImportError:
+        pass
     a = PUNCT.sub("", raw)
     b = norm(body)
     if not a:

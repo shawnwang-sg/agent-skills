@@ -43,6 +43,9 @@ description: 把抖音收藏视频的语音转写稿（douyin-fav-study 学习�
 ## 用户亲自指出的错字
 用户看页面时指出的错字（如「智慧[?]」应为「志气」，「事业[?]」「载体[?]」是对的），写进 `D:\douyin\_yuedu\corrections.json`：`{"211": [["智慧[?]", "志气"], ["事业[?]", "事业"]]}`。生成页面时按顺序套用到标题、金句、正文，返工重做也不会冲掉。改完重新生成页面，并用 grep 确认新字已在 yuedu.html 里。
 
+## 繁体转写
+有的视频被 whisper 转成了繁体。`build_yuedu.change_pct` 会先用 `zhconv` 把原稿转简体再比（繁转简不算改动）。zhconv 装在系统 Python（`python -m pip install --user zhconv`），没装也能跑，只是繁体稿的改动比例会虚高。生成页面直接用系统 `python` 跑 build 即可（只用到 sqlite）。
+
 ## 原视频
 每篇的「原视频」是页面内弹窗播放本地文件（`D:\douyin\<分类>\作者 - 标题.mp4`，用相对 yuedu.html 的路径），图文弹出本地图片；本地文件不在时才退回抖音链接。所以 yuedu.html 必须放在 `D:\douyin\` 根目录，不能单独挪走。
 
