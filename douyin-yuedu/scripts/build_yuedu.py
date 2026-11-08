@@ -4,7 +4,7 @@
 另有「待处理清单」tab：没信息量的（含学习台里因无对白跳过的）、疑似归错分类的；「质检」tab：改动比例和存疑统计。
 用法：python build_yuedu.py [--out D:\\douyin\\yuedu.html]
 """
-import argparse, collections, difflib, html, json, re, sqlite3, time
+import argparse, collections, difflib, html, json, re, sqlite3, time, urllib.parse
 from pathlib import Path
 
 APP = Path(r"C:\Users\Shugu\douyin-fav-study")
@@ -19,12 +19,13 @@ class _Punct:
 
 
 PUNCT = _Punct()
+LIMIT = 15  # 改动上限（%），用户定的
 CN_NUM = "一二三四五六七八九十"
 
 
 def norm(s):
     s = s.replace("[?]", "").replace("（原视频到此结束）", "")
-    s = re.sub(r"(?m)^## .*$", "", s)
+    s = re.sub(r"(?m)^## ", "", s)  # 小标题只去符号，文字参与比对（多半是原话里的词）
     s = re.sub(r"(?m)^\d+\. ", "", s)
     s = re.sub(r"(?m)^> [^：:]{1,6}[：:]", "", s)
     return PUNCT.sub("", s)
@@ -126,7 +127,16 @@ def main():
     tmap = {}
     if (WORK / "topics.json").exists():  # 小主题合并表：{大类: {原小主题: 合并后}}
         tmap = json.loads((WORK / "topics.json").read_text(encoding="utf-8"))
+    fixes = {}
+    if (WORK / "corrections.json").exists():  # 用户确认过的字词校正：{id: [[原文, 改成], ...]}
+        fixes = {k: v for k, v in json.loads((WORK / "corrections.json").read_text(encoding="utf-8")).items() if not k.startswith("_")}
     for x in res.values():
+        for a_, b_ in fixes.get(str(x["id"]), []):
+            for k in ("theme", "gold", "body"):
+                if x.get(k):
+                    x[k] = x[k].replace(a_, b_)
+        if fixes.get(str(x["id"])) and x.get("body") is not None:
+            x["unsure"] = x["body"].count("[?]")
         if x.get("verdict") == "keep":
             x["topic"] = tmap.get(x.get("category"), {}).get(x.get("topic"), x.get("topic"))
     keep = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
@@ -170,7 +180,8 @@ def main():
         if not cats:
             P.append("<p class=empty>这个分类还没转写完，转好后每满 100 条会整理进来。</p></section>")
             continue
-        P.append("<div class=toc>")
+        # 左侧固定导航：大类 → 小主题
+        P.append("<div class=layout><aside class=side><div class=side-in>")
         for cat in sorted(cats, key=cat_key):
             topics = cats[cat]
             total = sum(len(v) for v in topics.values())
@@ -178,7 +189,7 @@ def main():
             for t in sorted(topics, key=lambda t: -len(topics[t])):
                 P.append(f"<a href='#{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}<span>{len(topics[t])}</span></a>")
             P.append("</div></div>")
-        P.append("</div>")
+        P.append("</div></aside><div class=content>")
         for cat in sorted(cats, key=cat_key):
             topics = cats[cat]
             P.append(f"<h2 id='{f}-{html.escape(cat)}'>{html.escape(cat)}</h2>")
@@ -186,11 +197,11 @@ def main():
                 P.append(f"<h3 id='{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}</h3>")
                 for x in sorted(topics[t], key=lambda x: x["id"]):
                     src = html.escape(x["_author"] or "佚名")
-                    link = f" · <a href='{html.escape(x['_url'])}' target=_blank rel=noopener>原视频</a>" if x["_url"] else ""
+                    link = media_link(x, " · ")
                     P.append(f"<article data-s='{html.escape((x.get('theme', '') + x.get('gold', '') + x['_author']).lower())}'>"
                              f"<h5>{inline(x.get('theme', ''))}</h5><div class=src>—— {src}{link}</div>"
-                             f"<div class=gold>{inline(x.get('gold', ''))}</div><details><summary>读全文</summary>{render(x.get('body', ''))}</details></article>")
-        P.append("</section>")
+                             f"<div class=gold>{inline(x.get('gold', ''))}</div><div class=body>{render(x.get('body', ''))}</div></article>")
+        P.append("</div></div></section>")
 
     # 待处理清单
     P.append("<section id=tlow class=tab><h2>文字没有信息量的</h2><p class=note>这些不进阅读版。原文件都还在，需要的话可以回原视频看画面。</p>")
@@ -216,25 +227,50 @@ def main():
 
     # 质检
     vids = [x for x in qc if x["_pct"] is not None]
-    over = sorted([x for x in vids if x["_pct"] > 10], key=lambda x: -x["_pct"])
+    over = sorted([x for x in vids if x["_pct"] > LIMIT], key=lambda x: -x["_pct"])
     pcts = sorted(x["_pct"] for x in vids)
     avg = pcts[len(pcts) // 2] if pcts else 0  # 中位数，不受个别乱码长稿影响
     uns = sum(int(x.get("unsure") or 0) for x in qc)
     P.append(f"<section id=tqc class=tab><h2>质检</h2><p class=note>改动比例 = 去掉标点和排版标记后，和原始转写逐字比对的差异。"
-             f"超过 10% 的多半是转写错字多（改错字也算改动）。图文是识别图片文字后合并重排，不参与统计。</p><ul class=stat><li>阅读版 {len(qc)} 篇（视频 {len(vids)}）</li>"
-             f"<li>改动中位数 {avg:.1f}%</li><li>超过 10% 的 {len(over)} 篇</li><li>存疑 [?] 共 {uns} 处</li></ul>"
-             "<h3>改动超过 10% 的</h3><table>")
+             f"超过 15% 的多半是转写错字多（改错字也算改动）。图文是识别图片文字后合并重排，不参与统计。</p><ul class=stat><li>阅读版 {len(qc)} 篇（视频 {len(vids)}）</li>"
+             f"<li>改动中位数 {avg:.1f}%</li><li>超过 15% 的 {len(over)} 篇</li><li>存疑 [?] 共 {uns} 处</li></ul>"
+             "<h3>改动超过 15% 的</h3><table>")
     for x in over:
         P.append(f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('theme', ''))}</td><td>{html.escape(x['_author'])}</td><td>{x['_pct']:.0f}%</td>"
                  f"<td>{html.escape(x.get('note') or '')}</td></tr>")
     P.append("</table></section></main>" + JS)
     out = Path(a.out)
     out.write_text("".join(P), encoding="utf-8")
-    print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 视频改动中位数 {avg:.1f}% · 超 10% {len(over)}/{len(vids)} 篇")
+    print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 视频改动中位数 {avg:.1f}% · 超 15% {len(over)}/{len(vids)} 篇")
+
+
+IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
+PAGE_DIR = Path(r"D:\douyin")  # yuedu.html 所在目录，本地视频用相对路径引用
+
+
+def media_link(x, prefix=""):
+    """「原视频」：点开在页面里弹窗播放本地视频；图文弹出本地图片。本地文件找不到时退回抖音链接。"""
+    p = Path(x.get("_path") or "")
+    if p.exists():
+        try:
+            rel = p.relative_to(PAGE_DIR).as_posix()
+        except ValueError:
+            rel = p.as_uri()
+        q = urllib.parse.quote
+        if p.is_dir():
+            imgs = sorted(f.name for f in p.iterdir() if f.suffix.lower() in IMG_EXT)
+            if imgs:
+                srcs = json.dumps([q(f"{rel}/{n}") for n in imgs])
+                return f"{prefix}<a href='#' class=play data-imgs='{html.escape(srcs)}'>原图文</a>"
+        else:
+            return f"{prefix}<a href='#' class=play data-video='{html.escape(q(rel))}'>原视频</a>"
+    if x.get("_url"):
+        return f"{prefix}<a href='{html.escape(x['_url'])}' target=_blank rel=noopener>抖音原链接</a>"
+    return ""
 
 
 def row(x):
-    link = f"<a href='{html.escape(x['_url'])}' target=_blank rel=noopener>原视频</a>" if x.get("_url") else ""
+    link = media_link(x)
     return (f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('_folder', ''))}</td><td>{html.escape(x.get('theme') or '')}</td>"
             f"<td>{html.escape(x.get('_author', ''))}</td><td>{html.escape(x.get('reason') or '')}</td><td>{link}</td></tr>")
 
@@ -244,7 +280,15 @@ CSS = """
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#181614;--fg:#ebe6dd;--mut:#a69f94;--card:#211e1b;--line:#38332d;--acc:#e0a46b;--q:#2a2622;--on:#ebe6dd;--onfg:#181614}}
 :root[data-theme=dark]{--bg:#181614;--fg:#ebe6dd;--mut:#a69f94;--card:#211e1b;--line:#38332d;--acc:#e0a46b;--q:#2a2622;--on:#ebe6dd;--onfg:#181614}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.95 "Noto Serif SC","Source Han Serif SC","Songti SC","SimSun",serif}
-main{max-width:760px;margin:0 auto;padding:36px 16px 100px}a{color:var(--acc)}
+main{max-width:1680px;margin:0 auto;padding:28px 32px 100px}a{color:var(--acc)}
+header{max-width:none}#q{max-width:560px}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:40px;align-items:start}
+.side{position:sticky;top:64px;max-height:calc(100vh - 76px);overflow-y:auto;padding:14px 4px 30px 0;font-size:15px;line-height:1.7;border-right:1px solid var(--line)}
+.side .tc{padding:8px 10px 8px 0;border-bottom:1px dashed var(--line)}.side .tc:last-child{border:0}
+.side .tcat{display:block;font-weight:600;color:var(--fg);text-decoration:none}.side .tcat:hover,.side .ttop a:hover{color:var(--acc)}
+.side .ttop{display:block;margin:2px 0 0 12px}.side .ttop a{display:block;color:var(--mut);text-decoration:none;padding:1px 0}
+.side span{color:var(--mut);font-size:12px;margin-left:6px;font-weight:400}
+.content h2:first-child{margin-top:8px}h2,h3{scroll-margin-top:70px}
 header h1{font-size:30px;letter-spacing:.06em;margin:0}.sub{color:var(--mut);font-size:14px;margin:4px 0 14px}
 #q{width:100%;padding:9px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--fg);font:inherit;font-size:15px}
 .tabs{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:12px 0;margin:8px 0 6px;border-bottom:1px solid var(--line)}
@@ -267,14 +311,34 @@ mark{background:none;color:var(--mut);font-size:.8em}
 table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin-bottom:10px}td{border-bottom:1px solid var(--line);padding:6px 6px;vertical-align:top}td:first-child{color:var(--mut);white-space:nowrap}
 .stat{display:flex;flex-wrap:wrap;gap:8px 22px;padding:0;list-style:none;font-size:15px}
 .hide{display:none!important}
+.gold{margin-bottom:16px}
+@media (max-width:900px){main{padding:20px 16px 80px}.layout{grid-template-columns:1fr;gap:12px}
+ .side{position:static;max-height:none;border-right:0;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--card)}
+ .side .ttop{display:flex;flex-wrap:wrap;gap:0 12px;margin-left:0}}
 @media (max-width:600px){article{padding:18px 16px}body{font-size:17px}table{font-size:13px}}
+#pl{border:0;padding:0;background:#000;border-radius:12px;max-width:min(96vw,1100px);max-height:94vh;overflow:hidden}
+#pl::backdrop{background:rgba(0,0,0,.72)}
+#pl .x{position:absolute;top:8px;right:10px;z-index:2;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:22px;width:36px;height:36px;border-radius:50%;cursor:pointer}
+#pl video{display:block;max-width:min(96vw,1100px);max-height:94vh}
+#pl .imgs{max-height:94vh;overflow-y:auto;background:var(--bg);padding:10px}#pl .imgs img{display:block;max-width:100%;margin:0 auto 10px}
+.play{cursor:pointer}
 """
-JS = """<script>
+JS = """<dialog id=pl><button class=x aria-label=关闭>×</button><div class=stage></div></dialog><script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 $$('.tabs button').forEach(b=>b.onclick=()=>{$$('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
  $$('.tab').forEach(t=>t.classList.toggle('on',t.id===b.dataset.tab));try{localStorage.setItem('yuedu-tab',b.dataset.tab)}catch(e){}});
 try{const t=localStorage.getItem('yuedu-tab');const b=t&&$(`.tabs button[data-tab="${t}"]`);if(b)b.click()}catch(e){}
 $('#q').oninput=e=>{const q=e.target.value.trim().toLowerCase();$$('article').forEach(a=>a.classList.toggle('hide',!!q&&!a.dataset.s.includes(q)&&!a.textContent.toLowerCase().includes(q)))};
+// 「原视频」：弹窗播放本地视频 / 查看本地图文图片
+const pl=$('#pl'),stage=pl.querySelector('.stage');
+document.addEventListener('click',e=>{const a=e.target.closest('a.play');if(!a)return;e.preventDefault();
+ if(a.dataset.video){stage.innerHTML='';const v=document.createElement('video');v.controls=true;v.autoplay=true;v.src=a.dataset.video;
+  v.onerror=()=>{stage.innerHTML='<p style="color:#fff;padding:30px">打不开这个本地视频，可能已被移动或删除。</p>'};stage.append(v)}
+ else{const box=document.createElement('div');box.className='imgs';JSON.parse(a.dataset.imgs).forEach(s=>{const i=new Image();i.src=s;i.loading='lazy';box.append(i)});stage.innerHTML='';stage.append(box)}
+ pl.showModal()});
+pl.querySelector('.x').onclick=()=>pl.close();
+pl.addEventListener('click',e=>{if(e.target===pl)pl.close()});
+pl.addEventListener('close',()=>{stage.innerHTML=''});
 </script>"""
 
 if __name__ == "__main__":
