@@ -78,7 +78,7 @@ def main():
         return
 
     meta = {r["id"]: r for r in lib.items("id, local_path, aweme_id")}
-    moves = []
+    moves, already = [], []  # already：判了 move、但文件已经在目标分类里（比如之前挪过），只需按新分类重新整理
     for i, r in lib.done_results().items():
         if r.get("verdict") == "move":
             target = r.get("move_to")
@@ -89,6 +89,8 @@ def main():
         if target not in lib.tabs or i not in meta:
             continue
         src = Path(meta[i]["local_path"])
+        if lib.folder_of(src) == target and r.get("verdict") == "move":
+            already.append(i)
         if lib.folder_of(src) == target or not src.exists():
             continue
         dst = unique(lib.root / target / src.name)
@@ -103,7 +105,9 @@ def main():
         save(REL, rel)
         save(LOG, log + moves)
     print(f"{'将' if a.dry_run else '已'}挪动 {len(moves)} 条")
-    redo = [m["id"] for m in moves if m["verdict"] == "move"]
+    redo = [m["id"] for m in moves if m["verdict"] == "move"] + already
+    if already:
+        print(f"已在目标分类、待按新分类重新整理：{already}")
     if a.export and redo and not a.dry_run:
         from export_batches import item_json, write_batches
         rows = {r["id"]: r for r in lib.items("id, author, title, duration, media_type, transcript, local_path")}
