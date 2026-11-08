@@ -215,9 +215,13 @@ def main():
     by = collections.defaultdict(list)
     for x in low:
         by[x.get("low_info_type") or "其他"].append(x)
-    for t in ["画面为主", "断续口播", "纯音乐歌词", "残缺", "其他"]:
+    std = ["画面为主", "断续口播", "纯音乐歌词", "残缺", "其他"]
+    # 标准类型之后是自定义分组（如「转写太乱（待重转）」：内容有价值、转写太乱，留着以后用大模型重转）
+    for t in std + sorted(k for k in by if k not in std):
         if by.get(t):
-            P.append(f"<h3>{t}<span class=cnt>{len(by[t])}</span></h3><table>")
+            folders = sorted({x["_folder"] for x in by[t] if x.get("_folder")})
+            label = f"{'、'.join(folders)} · {t}" if t not in std and len(folders) == 1 else t
+            P.append(f"<h3>{html.escape(label)}<span class=cnt>{len(by[t])}</span></h3><table>")
             for x in sorted(by[t], key=lambda x: (x["_folder"], x["id"])):
                 P.append(row(x))
             P.append("</table>")
