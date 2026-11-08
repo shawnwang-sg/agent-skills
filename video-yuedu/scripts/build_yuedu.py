@@ -1,15 +1,18 @@
-"""把 done/ 里所有润色结果生成一个阅读页 yuedu.html。
+"""把一个库 done/ 里所有润色结果生成阅读页（默认 <库根目录>/yuedu.html）。
 
-结构：顶部 tab = 抖音收藏分类（厉害、爱好……），tab 里按「大类 → 小主题」分组，带目录和搜索；
-另有「待处理清单」tab：没信息量的（含学习台里因无对白跳过的）、疑似归错分类的；「质检」tab：改动比例和存疑统计。
-用法：python build_yuedu.py [--out D:\\douyin\\yuedu.html]
+结构：顶部 tab = 分类文件夹（config.json 的 tabs），tab 里按「大类 → 小主题」分组，左侧导航、搜索、
+连播 / 洗牌连播；另有「待处理清单」tab：没信息量的（含学习台里因无对白跳过的）、疑似归错分类的；
+「质检」tab：改动比例和存疑统计。
+用法：python build_yuedu.py --root D:\\douyin [--out 另存路径]
+子任务自检改动比例时只 import change_pct，不需要 --root。
 """
-import argparse, collections, difflib, html, json, re, sqlite3, time, urllib.parse
+import argparse, collections, difflib, html, json, re, sys, time, urllib.parse
 from pathlib import Path
 
-APP = Path(r"C:\Users\Shugu\douyin-fav-study")
-WORK = Path(r"D:\douyin\_yuedu")
-FOLDERS = ["厉害", "爱好", "厉害文字", "身体健康", "美食"]
+sys.path.insert(0, str(Path(__file__).parent))
+from lib import Lib, add_root_arg  # noqa: E402
+
+
 class _Punct:
     """去掉所有空白、标点和符号（Unicode 类别 P*/S*/Z*），只留文字和数字来比对。"""
     import unicodedata as _u
@@ -106,28 +109,21 @@ def cat_key(c):
     return (1, 0, c or "未分类")
 
 
-def folder_of(p):
-    parts = Path(p or "").parts
-    return parts[2] if len(parts) > 3 else ""
-
-
-def load():
-    res = {}
-    for f in sorted((WORK / "done").glob("*.json")):
-        for x in json.loads(f.read_text(encoding="utf-8")):
-            res[int(x["id"])] = x
-    c = sqlite3.connect(f"file:{APP / 'data' / 'library.db'}?mode=ro", uri=True)
-    c.row_factory = sqlite3.Row
-    meta = {r["id"]: dict(r) for r in c.execute(
-        "select id, author, title, url, local_path, transcript, duration, status, reason, media_type from items where source='local'")}
-    return res, meta
+LIB = None  # 当前库（main 里设置）
 
 
 def main():
+    global LIB
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=r"D:\douyin\yuedu.html")
+    add_root_arg(ap)
+    ap.add_argument("--out", default="")
     a = ap.parse_args()
-    res, meta = load()
+    LIB = lib = Lib(a.root)
+    WORK = lib.work
+    folder_of = lib.folder_of
+    res = lib.done_results()
+    meta = {r["id"]: r for r in lib.items("id, author, title, url, local_path, transcript, duration, status, reason, media_type")}
+    res = {i: x for i, x in res.items() if i in meta}  # 只要这个库的条目
 
     tmap = {}
     if (WORK / "topics.json").exists():  # 小主题合并表：{大类: {原小主题: 合并后}}
@@ -149,6 +145,8 @@ def main():
     for i, x in res.items():
         m = meta.get(i, {})
         folder = folder_of(m.get("local_path"))
+        if x.get("verdict") == "keep" and x.get("tab") in lib.tabs:  # 平铺库：润色时定的 tab（还没挪进文件夹也先归过去）
+            folder = x["tab"]
         x["_folder"], x["_author"], x["_url"] = folder, m.get("author") or "", m.get("url") or ""
         x["_path"] = m.get("local_path") or ""
         if x.get("verdict") == "keep":
@@ -162,18 +160,19 @@ def main():
             low.append(x)
     # 学习台里因为「几乎没有说话内容」而跳过的，也算没信息量（画面为主或纯音乐）
     for i, m in meta.items():
-        if m["status"] == "skipped" and i not in res and "说话内容" in (m.get("reason") or "") and folder_of(m["local_path"]) in FOLDERS:
+        if m["status"] == "skipped" and i not in res and "说话内容" in (m.get("reason") or "") and folder_of(m["local_path"]) in lib.all_tabs():
             low.append({"id": i, "verdict": "low_info", "low_info_type": "画面为主", "reason": "转写时几乎没听到说话（画面、字幕或纯音乐为主）",
                         "theme": re.sub(r"#\S+", "", m.get("title") or "").strip()[:40], "_folder": folder_of(m["local_path"]),
                         "_author": m.get("author") or "", "_url": m.get("url") or "", "_path": m.get("local_path") or ""})
 
     css = CSS
     P = ["<!doctype html><html lang=zh><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>",
-         f"<title>阅读 · 抖音收藏</title><style>{css}</style><body><main>",
-         "<header><h1>阅读 · 抖音收藏</h1>",
-         f"<p class=sub>视频转写稿 · 去口水词、改错字、不改原话 · 共 {len(qc)} 篇 · 更新于 {time.strftime('%Y-%m-%d %H:%M')}</p>",
+         f"<title>{html.escape(lib.title)}</title><style>{css}</style><body><main>",
+         f"<header><h1>{html.escape(lib.title)}</h1>",
+         f"<p class=sub>{html.escape(lib.cfg['subtitle'])} · 共 {len(qc)} 篇 · 更新于 {time.strftime('%Y-%m-%d %H:%M')}</p>",
          "<input id=q type=search placeholder='搜索标题、金句、作者……' autocomplete=off></header><nav class=tabs>"]
-    tabs = [f for f in FOLDERS if keep.get(f)] + [f for f in FOLDERS if not keep.get(f)]
+    order = lib.all_tabs() if keep.get(lib.inbox) else lib.tabs
+    tabs = [f for f in order if keep.get(f)] + [f for f in order if not keep.get(f)]
     for n, f in enumerate(tabs):
         cnt = sum(len(v) for t in keep.get(f, {}).values() for v in t.values())
         P.append(f"<button data-tab='t{n}' class='{'on' if n == 0 else ''}'>{f}<span>{cnt or '待整理'}</span></button>")
@@ -219,7 +218,8 @@ def main():
             for x in sorted(by[t], key=lambda x: (x["_folder"], x["id"])):
                 P.append(row(x))
             P.append("</table>")
-    P.append("<h2>疑似放错收藏分类的</h2><p class=note>建议在抖音里改收藏夹；这里先不收进阅读版。</p>")
+    P.append("<h2>疑似放错分类的</h2><p class=note>建议移到的是本库的分类时，会在本地挪过去再整理进阅读版；"
+             "建议移到「其他」等本库没有的分类，就只列在这里，不收进阅读版。</p>")
     bym = collections.defaultdict(list)
     for x in move:
         bym[x.get("move_to") or "其他"].append(x)
@@ -244,21 +244,19 @@ def main():
         P.append(f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('theme', ''))}</td><td>{html.escape(x['_author'])}</td><td>{x['_pct']:.0f}%</td>"
                  f"<td>{html.escape(x.get('note') or '')}</td></tr>")
     P.append("</table></section></main>" + JS)
-    out = Path(a.out)
+    out = Path(a.out) if a.out else lib.out
     out.write_text("".join(P), encoding="utf-8")
     print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 视频改动中位数 {avg:.1f}% · 超 15% {len(over)}/{len(vids)} 篇")
 
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
-PAGE_DIR = Path(r"D:\douyin")  # yuedu.html 所在目录，本地视频用相对路径引用
-
-
 def media_link(x, prefix=""):
-    """「原视频」：点开在页面里弹窗播放本地视频；图文弹出本地图片。本地文件找不到时退回抖音链接。"""
+    """「原视频」：点开在页面里弹窗播放本地视频；图文弹出本地图片。本地文件找不到时退回线上链接。
+    阅读页放在库根目录，本地文件用相对路径引用（所以页面不能单独挪走）。"""
     p = Path(x.get("_path") or "")
     if p.exists():
         try:
-            rel = p.relative_to(PAGE_DIR).as_posix()
+            rel = p.relative_to(LIB.out.parent).as_posix()
         except ValueError:
             rel = p.as_uri()
         q = urllib.parse.quote
@@ -270,7 +268,7 @@ def media_link(x, prefix=""):
         else:
             return f"{prefix}<a href='#' class=play data-video='{html.escape(q(rel))}'>原视频</a>"
     if x.get("_url"):
-        return f"{prefix}<a href='{html.escape(x['_url'])}' target=_blank rel=noopener>抖音原链接</a>"
+        return f"{prefix}<a href='{html.escape(x['_url'])}' target=_blank rel=noopener>{html.escape(LIB.cfg['link_label'])}</a>"
     return ""
 
 

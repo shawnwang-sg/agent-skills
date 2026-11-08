@@ -33,7 +33,7 @@ agent-skills/
 | [quote-collection-publish](./quote-collection-publish) | 名言/摘抄 txt → 分类、去重、润色（附对照页）→ A4 双栏分页 PDF（一页一集）+ 每集 MP3 朗读（edge-tts）+ TXT + MOBI，四者分集分段一致。 |
 | [quote-wallpaper](./quote-wallpaper) | 名言 → 桌面文字壁纸，每条一张；右上角固定磨砂玻璃框（≤100 字横条框，101–300 字大框），字号自动取最大。 |
 | [jiayanchao-import](./jiayanchao-import) | 名言批量导入本地 growth-planner「嘉言钞」：宽松去重、长段拆短句、拆出处，写前自动备份。 |
-| [douyin-yuedu](./douyin-yuedu) | Turn Douyin-favorite video transcripts (from the local douyin-fav-study app) into a reading edition `yuedu.html`: fix ASR typos, drop filler words, add punctuation without rewriting (≤15% change, with a rework step), lay out paragraphs/headings/lists/dialogue/gold quote, group by favorite folder → category → topic, and list misfiled and low-information items separately. Re-runs incrementally every ~100 new transcripts. |
+| [video-yuedu](./video-yuedu) | Turn a local library of saved short videos (Douyin, Xiaohongshu… downloaded into category folders or flat) into a browsable reading page `yuedu.html`: transcribe-only via the local douyin-fav-study app, fix ASR typos, drop filler words and add punctuation without rewriting (≤15% change, with rework/QA steps), lay out paragraphs/headings/lists/dialogue/gold quote, group by folder tab → category → topic with a side nav, play the local video in-page with play-all / shuffle-play, relocate misfiled items into the right local folder, and list low-information items. Per-library config in `<root>/_yuedu/`; re-runs every ~100 new transcripts. |
 
 ## Glossaries
 

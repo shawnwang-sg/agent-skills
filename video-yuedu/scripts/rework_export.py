@@ -1,14 +1,15 @@
 """找出改动超过上限（默认 15%）的视频篇目，连同原转写、现稿和逐处差异导出成返工批次。
 
-用法：python rework_export.py [--limit 15] [--size 20]
-输出：<工作目录>/todo/rework_<时间>_<序号>.json；子任务返工后写到 done/batch_rework_<时间>_<序号>.json
+用法：python rework_export.py --root D:\\douyin [--limit 15] [--size 20]
+输出：<库>/_yuedu/todo/rework_<时间>_<序号>.json；子任务返工后写到 done/batch_rework_<时间>_<序号>.json
 （文件名排序在原批次之后，同 id 的新结果会覆盖旧结果）。
 """
-import argparse, difflib, json, sqlite3, sys, time
+import argparse, difflib, json, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_yuedu import APP, PUNCT, WORK, change_pct, load, norm  # noqa: E402
+from build_yuedu import PUNCT, change_pct, norm  # noqa: E402
+from lib import Lib, add_root_arg  # noqa: E402
 
 
 def ops(raw, body):
@@ -22,10 +23,13 @@ def ops(raw, body):
 
 def main():
     ap = argparse.ArgumentParser()
+    add_root_arg(ap)
     ap.add_argument("--limit", type=float, default=15)
     ap.add_argument("--size", type=int, default=20)
     a = ap.parse_args()
-    res, meta = load()
+    lib = Lib(a.root)
+    res = lib.done_results()
+    meta = {r["id"]: r for r in lib.items("id, author, title, transcript")}
     items = []
     for i, x in res.items():
         if x.get("verdict") != "keep" or i not in meta:
@@ -37,9 +41,9 @@ def main():
                           "raw": raw, "current": x, "diff": ops(raw, x.get("body") or "")})
     items.sort(key=lambda x: -x["pct"])
     stamp = time.strftime("%m%d%H%M")
-    (WORK / "todo").mkdir(parents=True, exist_ok=True)
+    (lib.work / "todo").mkdir(parents=True, exist_ok=True)
     for n in range(0, len(items), a.size):
-        p = WORK / "todo" / f"rework_{stamp}_{n // a.size + 1:03d}.json"
+        p = lib.work / "todo" / f"rework_{stamp}_{n // a.size + 1:03d}.json"
         p.write_text(json.dumps(items[n:n + a.size], ensure_ascii=False, indent=1), encoding="utf-8")
         print(p)
     print(f"超过 {a.limit}% 的共 {len(items)} 篇")
