@@ -194,12 +194,12 @@ def main():
             for t in sorted(topics, key=lambda t: -len(topics[t])):
                 P.append(f"<a href='#{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}<span>{len(topics[t])}</span></a>")
             P.append("</div></div>")
-        P.append("</div></aside><div class=content>")
+        P.append(f"</div></aside><div class=content><div class=tabplay>「{html.escape(f)}」全部{PLAYBTN}</div>")
         for cat in sorted(cats, key=cat_key):
             topics = cats[cat]
-            P.append(f"<h2 id='{f}-{html.escape(cat)}'>{html.escape(cat)}</h2>")
+            P.append(f"<h2 id='{f}-{html.escape(cat)}'>{html.escape(cat)}{PLAYBTN}</h2>")
             for t in sorted(topics, key=lambda t: -len(topics[t])):
-                P.append(f"<h3 id='{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}</h3>")
+                P.append(f"<h3 id='{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}{PLAYBTN}</h3>")
                 for x in sorted(topics[t], key=lambda x: x["id"]):
                     src = html.escape(x["_author"] or "佚名")
                     link = media_link(x, " · ")
@@ -327,23 +327,55 @@ table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin-
 #pl video{display:block;max-width:min(96vw,1100px);max-height:94vh}
 #pl .imgs{max-height:94vh;overflow-y:auto;background:var(--bg);padding:10px}#pl .imgs img{display:block;max-width:100%;margin:0 auto 10px}
 .play{cursor:pointer}
+.pp{display:inline-flex;gap:6px;margin-left:14px;vertical-align:middle}
+.pp button{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:999px;padding:1px 11px;font:inherit;font-size:13px;line-height:1.7;cursor:pointer;letter-spacing:0;font-weight:400}
+.pp button:hover{color:var(--acc);border-color:var(--acc)}
+.tabplay{font-size:14px;color:var(--mut);margin:8px 0 -18px}
+#pl .bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:#111;color:#ddd;font-size:14px}
+#pl.list .bar{display:flex}#pl.list video{max-height:calc(94vh - 46px)}#pl.list .imgs{max-height:calc(94vh - 46px)}
+#pl .bar .info{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pl .bar button{border:1px solid #444;background:#222;color:#eee;border-radius:999px;padding:2px 12px;font:inherit;font-size:13px;cursor:pointer}
+article.now{outline:2px solid var(--acc);outline-offset:3px}
 """
-JS = """<dialog id=pl><button class=x aria-label=关闭>×</button><div class=stage></div></dialog><script>
+PLAYBTN = "<span class=pp><button class=pa data-mode=seq title=按顺序连续播放>▶ 连播</button><button class=pa data-mode=shuf title=随机顺序连续播放>🔀 洗牌</button></span>"
+JS = """<dialog id=pl><button class=x aria-label=关闭>×</button><div class=stage></div><div class=bar><button class=prev>↑ 上一条</button><span class=info></span><button class=next>下一条 ↓</button></div></dialog><script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 $$('.tabs button').forEach(b=>b.onclick=()=>{$$('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
  $$('.tab').forEach(t=>t.classList.toggle('on',t.id===b.dataset.tab));try{localStorage.setItem('yuedu-tab',b.dataset.tab)}catch(e){}});
 try{const t=localStorage.getItem('yuedu-tab');const b=t&&$(`.tabs button[data-tab="${t}"]`);if(b)b.click()}catch(e){}
 $('#q').oninput=e=>{const q=e.target.value.trim().toLowerCase();$$('article').forEach(a=>a.classList.toggle('hide',!!q&&!a.dataset.s.includes(q)&&!a.textContent.toLowerCase().includes(q)))};
 // 「原视频」：弹窗播放本地视频 / 查看本地图文图片
-const pl=$('#pl'),stage=pl.querySelector('.stage');
+const pl=$('#pl'),stage=pl.querySelector('.stage'),info=pl.querySelector('.info');
+let list=[],cur=-1,timer=0;
+function load(a,onEnd){clearTimeout(timer);stage.innerHTML='';
+ if(a.dataset.video){const v=document.createElement('video');v.controls=true;v.autoplay=true;v.src=a.dataset.video;
+  v.onerror=()=>{stage.innerHTML='<p style="color:#fff;padding:30px">打不开这个本地视频，可能已被移动或删除。</p>';if(onEnd)timer=setTimeout(onEnd,1200)};
+  if(onEnd)v.onended=onEnd;stage.append(v)}
+ else{const box=document.createElement('div');box.className='imgs';JSON.parse(a.dataset.imgs).forEach(s=>{const i=new Image();i.src=s;i.loading='lazy';box.append(i)});stage.append(box);
+  if(onEnd)timer=setTimeout(onEnd,8000)}}
 document.addEventListener('click',e=>{const a=e.target.closest('a.play');if(!a)return;e.preventDefault();
- if(a.dataset.video){stage.innerHTML='';const v=document.createElement('video');v.controls=true;v.autoplay=true;v.src=a.dataset.video;
-  v.onerror=()=>{stage.innerHTML='<p style="color:#fff;padding:30px">打不开这个本地视频，可能已被移动或删除。</p>'};stage.append(v)}
- else{const box=document.createElement('div');box.className='imgs';JSON.parse(a.dataset.imgs).forEach(s=>{const i=new Image();i.src=s;i.loading='lazy';box.append(i)});stage.innerHTML='';stage.append(box)}
- pl.showModal()});
+ list=[];pl.classList.remove('list');load(a);if(!pl.open)pl.showModal()});
+// 连播 / 洗牌连播：按钮所在的整个 tab、大类（到下一个大类为止）或小主题（到下一个标题为止），跳过被搜索隐藏的
+function scope(b){const h=b.closest('h2,h3,.tabplay');let r=[];
+ if(h.classList.contains('tabplay'))r=[...h.parentElement.querySelectorAll('article')];
+ else{const stop=h.tagName==='H2'?['H2']:['H2','H3'];for(let n=h.nextElementSibling;n&&!stop.includes(n.tagName);n=n.nextElementSibling)if(n.tagName==='ARTICLE')r.push(n)}
+ return r.filter(a=>!a.classList.contains('hide')&&a.querySelector('a.play'))}
+function go(i){if(!list.length)return;if(i>=list.length){pl.close();return}cur=Math.max(0,i);const art=list[cur];
+ $$('article.now').forEach(x=>x.classList.remove('now'));art.classList.add('now');
+ info.textContent=`${cur+1} / ${list.length} · ${art.querySelector('h5').textContent}`;load(art.querySelector('a.play'),()=>go(cur+1))}
+document.addEventListener('click',e=>{const b=e.target.closest('button.pa');if(!b)return;e.preventDefault();e.stopPropagation();
+ list=scope(b);if(!list.length){alert('这里没有可播放的原视频');return}
+ if(b.dataset.mode==='shuf')for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]]}
+ pl.classList.add('list');if(!pl.open)pl.showModal();go(0)});
+pl.querySelector('.next').onclick=()=>go(cur+1);pl.querySelector('.prev').onclick=()=>go(cur-1);
+pl.addEventListener('keydown',e=>{if(!list.length)return;
+ if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();go(cur+1)}else if(e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();go(cur-1)}});
+let wt=0;pl.addEventListener('wheel',e=>{if(!list.length||e.target.closest('.imgs'))return;e.preventDefault();const t=Date.now();
+ if(t-wt<700||Math.abs(e.deltaY)<30)return;wt=t;go(cur+(e.deltaY>0?1:-1))},{passive:false});
 pl.querySelector('.x').onclick=()=>pl.close();
 pl.addEventListener('click',e=>{if(e.target===pl)pl.close()});
-pl.addEventListener('close',()=>{stage.innerHTML=''});
+pl.addEventListener('close',()=>{clearTimeout(timer);stage.innerHTML='';const n=$('article.now');
+ if(list.length&&n){n.scrollIntoView({block:'center'});setTimeout(()=>n.classList.remove('now'),2500)}list=[];pl.classList.remove('list')});
 </script>"""
 
 if __name__ == "__main__":
