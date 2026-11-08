@@ -27,11 +27,13 @@ description: 把抖音收藏视频的语音转写稿（douyin-fav-study 学习�
 2. **分批润色排版**：每批交给一个子任务（Agent，sonnet 足够），prompt 要点：先读 `references/format.md`，再看 `done/batch_000_trial.json` 里 2～3 条 keep 当样例，处理 `todo/<批>.json`，结果写到 `done/<同名>.json`，写完自己读回校验（条数一致、keep 字段齐全、gold 能在正文里原样找到）。几批可以并行，一个子任务处理 2～3 批。
    - 新的收藏分类第一次处理时，先让一个子任务定下该分类的大类表，存到 `D:\douyin\_yuedu\categories.json`（`{"爱好": ["运动健身", ...]}`），之后的批次都用这张表，保证分类一致。
 3. **抽查**：随机看几条 keep 的 body 和原转写对比，重点看有没有改写原话、错字是否改对；move/low_info 是否合理。
+   - 子任务偶尔会把「厉害」里的图文金句判成「移到厉害文字」，这是错的（规则里已写明），发现了就改成 keep，补写到 `done/batch_fix_XXX.json`（文件名排在后面的覆盖前面的同 id 结果）。
+   - **小主题合并**：并行的子任务起的小主题会很碎（同义词、只有 1 篇的）。看一下各大类的小主题分布，把细碎的写进 `D:\douyin\_yuedu\topics.json`（`{大类: {原小主题: 合并后}}`），每个大类留 2～7 个主题。生成页面时自动套用。
 4. **生成阅读页**：
    ```bash
    .venv/Scripts/python -X utf8 ~/.claude/skills/douyin-yuedu/scripts/build_yuedu.py
    ```
-   输出篇数、没信息量、疑似分错、平均改动、超 10% 篇数。可以用无界面 Chrome 截图检查：`chrome --headless=new --screenshot=x.png --window-size=820,1800 file:///D:/douyin/yuedu.html`。
+   输出篇数、没信息量、疑似分错、视频改动中位数、超 10% 篇数（图文是识别图片文字后重排，不算改动比例；比对时去掉所有标点符号）。第一轮 401 篇视频的改动中位数约 14%，多出来的基本是改错字。可以用无界面 Chrome 截图检查：`chrome --headless=new --screenshot=x.png --window-size=820,1800 file:///D:/douyin/yuedu.html`。
 5. **等下一轮**：后台跑 `scripts/wait_new.py --n 100`，攒够 100 条新转好的（或转写队列跑完）就退出，再从第 1 步做一轮。
 6. **汇报**：本次新增几篇、各分类篇数、没信息量/疑似分错各几条、平均改动和超 10% 的篇数、本周额度。
 

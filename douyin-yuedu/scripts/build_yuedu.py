@@ -10,7 +10,15 @@ from pathlib import Path
 APP = Path(r"C:\Users\Shugu\douyin-fav-study")
 WORK = Path(r"D:\douyin\_yuedu")
 FOLDERS = ["厉害", "爱好", "厉害文字", "身体健康", "美食"]
-PUNCT = re.compile(r"[\s，。、；：？！…—「」『』“”‘’（）《》()\[\]?,.;:!\"'﹐·\-*>#]")
+class _Punct:
+    """去掉所有空白、标点和符号（Unicode 类别 P*/S*/Z*），只留文字和数字来比对。"""
+    import unicodedata as _u
+
+    def sub(self, _repl, s):
+        return "".join(ch for ch in s if not ch.isspace() and self._u.category(ch)[0] not in "PSZ")
+
+
+PUNCT = _Punct()
 CN_NUM = "一二三四五六七八九十"
 
 
@@ -23,11 +31,10 @@ def norm(s):
 
 
 def change_pct(raw, body):
+    """视频转写稿和阅读稿的逐字差异比例。图文（识别图片文字后合并重排）不适合这样比，返回 None。"""
     if "【正文】" in raw or "【图1】" in raw:
-        # 图文：原稿里有作者/链接/话题和重复识别的图片文字，只拿正文部分比
-        raw = raw.split("【图1】")[0] if len(raw.split("【图1】")[0]) > 30 else raw
-        raw = re.sub(r"(?m)^(作者|链接)：.*$", "", raw)
-    a = PUNCT.sub("", re.sub(r"#\S+|【(正文|图\d+)】", "", raw))
+        return None
+    a = PUNCT.sub("", raw)
     b = norm(body)
     if not a:
         return 0.0
@@ -116,6 +123,12 @@ def main():
     a = ap.parse_args()
     res, meta = load()
 
+    tmap = {}
+    if (WORK / "topics.json").exists():  # 小主题合并表：{大类: {原小主题: 合并后}}
+        tmap = json.loads((WORK / "topics.json").read_text(encoding="utf-8"))
+    for x in res.values():
+        if x.get("verdict") == "keep":
+            x["topic"] = tmap.get(x.get("category"), {}).get(x.get("topic"), x.get("topic"))
     keep = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
     low, move, qc = [], [], []
     for i, x in res.items():
@@ -202,12 +215,14 @@ def main():
     P.append("</section>")
 
     # 质检
-    over = sorted([x for x in qc if x["_pct"] > 10], key=lambda x: -x["_pct"])
-    avg = sum(x["_pct"] for x in qc) / len(qc) if qc else 0
+    vids = [x for x in qc if x["_pct"] is not None]
+    over = sorted([x for x in vids if x["_pct"] > 10], key=lambda x: -x["_pct"])
+    pcts = sorted(x["_pct"] for x in vids)
+    avg = pcts[len(pcts) // 2] if pcts else 0  # 中位数，不受个别乱码长稿影响
     uns = sum(int(x.get("unsure") or 0) for x in qc)
     P.append(f"<section id=tqc class=tab><h2>质检</h2><p class=note>改动比例 = 去掉标点和排版标记后，和原始转写逐字比对的差异。"
-             f"超过 10% 的多半是转写错字多（改错字也算改动）。</p><ul class=stat><li>阅读版 {len(qc)} 篇</li>"
-             f"<li>平均改动 {avg:.1f}%</li><li>超过 10% 的 {len(over)} 篇</li><li>存疑 [?] 共 {uns} 处</li></ul>"
+             f"超过 10% 的多半是转写错字多（改错字也算改动）。图文是识别图片文字后合并重排，不参与统计。</p><ul class=stat><li>阅读版 {len(qc)} 篇（视频 {len(vids)}）</li>"
+             f"<li>改动中位数 {avg:.1f}%</li><li>超过 10% 的 {len(over)} 篇</li><li>存疑 [?] 共 {uns} 处</li></ul>"
              "<h3>改动超过 10% 的</h3><table>")
     for x in over:
         P.append(f"<tr><td>#{x['id']}</td><td>{html.escape(x.get('theme', ''))}</td><td>{html.escape(x['_author'])}</td><td>{x['_pct']:.0f}%</td>"
@@ -215,7 +230,7 @@ def main():
     P.append("</table></section></main>" + JS)
     out = Path(a.out)
     out.write_text("".join(P), encoding="utf-8")
-    print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 平均改动 {avg:.1f}% · 超 10% {len(over)} 篇")
+    print(f"{out}  阅读 {len(qc)} 篇 · 没信息量 {len(low)} · 疑似分错 {len(move)} · 视频改动中位数 {avg:.1f}% · 超 10% {len(over)}/{len(vids)} 篇")
 
 
 def row(x):
