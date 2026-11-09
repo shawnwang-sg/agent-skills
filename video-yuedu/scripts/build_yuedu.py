@@ -208,9 +208,9 @@ def main():
                 P.append(f"<h3 id='{f}-{html.escape(cat)}-{html.escape(t)}'>{html.escape(t)}{PLAYBTN}</h3>")
                 for x in sorted(topics[t], key=lambda x: x["id"]):
                     src = html.escape(x["_author"] or "佚名")
-                    link = media_link(x, " · ")
+                    link = media_link(x, "")
                     P.append(f"<article id='a{x['id']}' data-id='{x['id']}' data-s='{html.escape((x.get('theme', '') + x.get('gold', '') + x['_author']).lower())}'>"
-                             f"<h5>{inline(x.get('theme', ''))}</h5><div class=src><span>—— {src}{link}</span>{DELBTN}</div>"
+                             f"<div class=hd><h5>{inline(x.get('theme', ''))}</h5>{link}</div><div class=src><span>—— {src}</span>{DELBTN}</div>"
                              f"<div class=gold>{inline(x.get('gold', ''))}</div><div class=body>{render(x.get('body', ''))}</div></article>")
         P.append("</div></div></section>")
 
@@ -341,6 +341,10 @@ h2{font-size:24px;margin:44px 0 6px;color:var(--acc);letter-spacing:.04em}h3{fon
 article{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 26px;margin:14px 0}
 article h5{font-size:20px;margin:0;line-height:1.5}.src{color:var(--mut);font-size:13px;margin:2px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .src button.del{flex:none;opacity:.55}.src button.del:hover{opacity:1}
+.hd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px}
+.hd>a{flex:none;display:inline-flex;align-items:center;gap:6px;padding:7px 20px;border-radius:999px;background:var(--acc);color:var(--card);
+ text-decoration:none;font-size:16px;font-weight:600;line-height:1.4;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.hd>a::before{content:"▶";font-size:13px}.hd>a[data-imgs]::before{content:"🖼"}.hd>a:hover{filter:brightness(1.1)}
 .gold{border-left:3px solid var(--acc);padding:2px 0 2px 14px;color:var(--acc);font-size:17px;line-height:1.8}
 details{margin-top:12px}summary{cursor:pointer;color:var(--mut);font-size:14px;list-style:none}summary::before{content:"▸ "}details[open] summary::before{content:"▾ "}
 details[open] summary{margin-bottom:12px}
