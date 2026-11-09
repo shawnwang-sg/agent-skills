@@ -370,6 +370,11 @@ table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin-
 #pl .bar .info{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pl .bar button{border:1px solid #444;background:#222;color:#eee;border-radius:999px;padding:2px 12px;font:inherit;font-size:13px;cursor:pointer}
 article.now{outline:2px solid var(--acc);outline-offset:3px}
+.side .fx{border:0;background:none;color:var(--mut);cursor:pointer;font:inherit;font-size:12px;width:16px;padding:0;margin-left:-16px;vertical-align:baseline}
+.side .tc,.side .ttop{padding-left:16px}.side .ttop{margin-left:0}.side .fx:hover{color:var(--acc)}
+.side .fold-c>.ttop,.side .fold-t+.tart{display:none}.side .fx+a.tcat,.side .fx+a.tt{display:inline-block}
+.side .foldall{display:flex;gap:8px;margin:0 0 6px 0;font-size:12px}.side .foldall button{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:999px;padding:1px 10px;cursor:pointer;font:inherit}
+.side .foldall button:hover{color:var(--acc);border-color:var(--acc)}
 """
 PLAYBTN = "<span class=pp><button class=pa data-mode=seq title=按顺序连续播放>▶ 连播</button><button class=pa data-mode=shuf title=随机顺序连续播放>🔀 洗牌</button></span>"
 JS = """<dialog id=pl><button class=x aria-label=关闭>×</button><div class=stage></div><div class=bar><button class=prev>↑ 上一条</button><span class=info></span><button class=next>下一条 ↓</button></div></dialog><script>
@@ -436,6 +441,18 @@ document.addEventListener('click',e=>{const b=e.target.closest('button.del');if(
  const id=b.closest('[data-id]').dataset.id;b.dataset.restore?restore(id):del(id)});
 $('#binexp').onclick=()=>{const blob=new Blob([JSON.stringify({page:PAGE_NAME,ids:[...DEL].map(Number)},null,1)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${PAGE_NAME}-回收站.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+// 左侧导航折叠：大类、小主题前的 ▸/▾ 单独折叠；顶部「全部折叠 / 全部展开」。默认只展开到小主题，状态存 localStorage
+const FKEY='yuedu-fold:'+location.pathname;let FOLD={};try{FOLD=JSON.parse(localStorage.getItem(FKEY)||'{}')}catch(e){}
+const saveFold=()=>{try{localStorage.setItem(FKEY,JSON.stringify(FOLD))}catch(e){}};
+function fkey(el){const a=el.classList.contains('tc')?el.querySelector('a.tcat'):el;return a.getAttribute('href')}
+function setFold(el,on){const c=el.classList.contains('tc')?'fold-c':'fold-t';el.classList.toggle(c,on);
+ const b=el.classList.contains('tc')?el.querySelector(':scope>.fx'):el.previousElementSibling;if(b&&b.classList.contains('fx'))b.textContent=on?'▸':'▾';FOLD[fkey(el)]=on?1:0}
+$$('.side .tc').forEach(tc=>{const b=document.createElement('button');b.className='fx';tc.prepend(b);b.onclick=e=>{e.preventDefault();setFold(tc,!tc.classList.contains('fold-c'));saveFold()};
+ const k=fkey(tc);setFold(tc,k in FOLD?!!FOLD[k]:false)});
+$$('.side a.tt').forEach(a=>{const b=document.createElement('button');b.className='fx';a.before(b);b.onclick=e=>{e.preventDefault();setFold(a,!a.classList.contains('fold-t'));saveFold()};
+ const k=fkey(a);setFold(a,k in FOLD?!!FOLD[k]:true)});
+$$('.side .side-in').forEach(s=>{const d=document.createElement('div');d.className='foldall';d.innerHTML='<button data-f=1>全部折叠</button><button data-f=0>全部展开</button>';s.prepend(d);
+ d.onclick=e=>{const b=e.target.closest('button');if(!b)return;const on=b.dataset.f==='1';s.querySelectorAll('.tc,a.tt').forEach(x=>setFold(x,on));saveFold()}});
 pl.querySelector('.x').onclick=()=>pl.close();
 pl.addEventListener('click',e=>{if(e.target===pl)pl.close()});
 pl.addEventListener('close',()=>{clearTimeout(timer);stage.innerHTML='';const n=$('article.now');
