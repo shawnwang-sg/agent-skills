@@ -210,7 +210,7 @@ def main():
                     src = html.escape(x["_author"] or "佚名")
                     link = media_link(x, " · ")
                     P.append(f"<article id='a{x['id']}' data-id='{x['id']}' data-s='{html.escape((x.get('theme', '') + x.get('gold', '') + x['_author']).lower())}'>"
-                             f"<h5>{inline(x.get('theme', ''))}</h5><div class=src>—— {src}{link} · {DELBTN}</div>"
+                             f"<h5>{inline(x.get('theme', ''))}</h5><div class=src><span>—— {src}{link}</span>{DELBTN}</div>"
                              f"<div class=gold>{inline(x.get('gold', ''))}</div><div class=body>{render(x.get('body', ''))}</div></article>")
         P.append("</div></div></section>")
 
@@ -339,7 +339,8 @@ header h1{font-size:30px;letter-spacing:.06em;margin:0}.sub{color:var(--mut);fon
 .toc span,.cnt{color:var(--mut);font-size:12px;margin-left:4px;font-weight:400}.ttop{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:2px}.ttop a{text-decoration:none;color:var(--mut)}
 h2{font-size:24px;margin:44px 0 6px;color:var(--acc);letter-spacing:.04em}h3{font-size:18px;margin:26px 0 10px;color:var(--mut);font-weight:600}
 article{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 26px;margin:14px 0}
-article h5{font-size:20px;margin:0;line-height:1.5}.src{color:var(--mut);font-size:13px;margin:2px 0 12px}
+article h5{font-size:20px;margin:0;line-height:1.5}.src{color:var(--mut);font-size:13px;margin:2px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.src button.del{flex:none;opacity:.55}.src button.del:hover{opacity:1}
 .gold{border-left:3px solid var(--acc);padding:2px 0 2px 14px;color:var(--acc);font-size:17px;line-height:1.8}
 details{margin-top:12px}summary{cursor:pointer;color:var(--mut);font-size:14px;list-style:none}summary::before{content:"▸ "}details[open] summary::before{content:"▾ "}
 details[open] summary{margin-bottom:12px}
