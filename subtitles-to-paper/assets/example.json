@@ -1,0 +1,55 @@
+{
+  "document_id": "DEMO",
+  "original_language": "en",
+  "title": {
+    "en": "A short conversation about careful reading",
+    "zh": "关于认真阅读的一段对话"
+  },
+  "program": {
+    "en": "Original formatting sample",
+    "zh": "原创排版示例"
+  },
+  "speakers": {
+    "host": {"en": "Host", "zh": "主持人"},
+    "guest": {"en": "Guest", "zh": "嘉宾"}
+  },
+  "introduction": {
+    "en": "This fictional exchange demonstrates the layout of a conversation between a host and a guest. The names are role labels, not real people.",
+    "zh": "这段虚构对话用于展示主持人与嘉宾问答的版式。人物名称是角色标记，不指向真实人物。"
+  },
+  "sources": [
+    {
+      "id": "R01",
+      "text": {
+        "en": "Original text written for this skill's formatting example; no external interview is reproduced.",
+        "zh": "为本技能排版示例原创的文字，未转载外部访谈。"
+      }
+    }
+  ],
+  "paragraphs": [
+    {
+      "id": "DEMO-D0001",
+      "speaker": "host",
+      "text": {"en": "What do you check before changing a sentence?", "zh": "修改一句话之前，你会先检查什么？"},
+      "source_refs": ["R01:paragraph 1"]
+    },
+    {
+      "id": "DEMO-D0002",
+      "speaker": "guest",
+      "text": {"en": "I check its context. Keeping the word not can be more important than making the sentence shorter.", "zh": "我会先检查上下文。保留一个“不”字，可能比把句子改短更重要。"},
+      "source_refs": ["R01:paragraph 2"]
+    },
+    {
+      "id": "DEMO-D0003",
+      "speaker": "host",
+      "text": {"en": "[Unclear word] What if one term remains uncertain?", "zh": "[听辨不清] 如果仍有一个词不能确认呢？"},
+      "source_refs": ["R01:paragraph 3"]
+    },
+    {
+      "id": "DEMO-D0004",
+      "speaker": "guest",
+      "text": {"en": "I keep the uncertainty visible. A 10% estimate is not an exact count, and A & B are two labels.", "zh": "我会保留这个疑点。10% 的估计并不是精确计数，A & B 是两个标记。"},
+      "source_refs": ["R01:paragraph 4"]
+    }
+  ]
+}
