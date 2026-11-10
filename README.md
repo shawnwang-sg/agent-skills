@@ -39,6 +39,7 @@ agent-skills/
 | [video-yuedu](./video-yuedu) | Turn a local video-favorites library (Douyin, Xiaohongshu… downloaded videos and image notes, in category folders or flat) into a browsable reading page `yuedu.html`: transcribe via the local douyin-fav-study app, fix ASR typos, drop filler words, add punctuation without rewriting (≤15% change), lay out paragraphs/headings/lists/dialogue/gold quote, group by tab → category → topic, with side nav (collapsible), search, in-page video playback, continuous/shuffle play, local re-filing of misplaced items, and a separate low-information list. Re-runs incrementally every ~100 new transcripts. (Formerly `douyin-yuedu`.) |
 | [moerduo-collection](./moerduo-collection) | 「磨耳朵」英语听力素材库：把单集文件夹搬运、重命名进合集目录；用 `build_collection.py` 全量重建 `磨耳朵.docx`（按集号排序、碎片字幕重排成逐行文稿、章标题 + 分页 + 目录）。 |
 | [lesson-splitter](./lesson-splitter) | 英语课程 MP3 按约 6 分钟均衡切分，同步切分同名英文 SRT，并生成 Word 文稿；尾段太短时均摊，避免碎片。 |
+| [working-preferences](./working-preferences) | 做事偏好总表（从历史对话归纳）：沟通和进度汇报、先小样再批量、文字整理尺度（保留原话、改动 ≤15%）、版面取舍（省空间、一套风格、短标题）、下载和账号安全（不并发、不付费）、文件和产物、skill 与 GitHub 的习惯。跨任务通用，开工前先读。 |
 
 ## Glossaries
 
