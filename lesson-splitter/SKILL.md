@@ -19,7 +19,7 @@ description: 将 MP3 英语课程按约 6 分钟均衡切分，配套切分同�
 使用 skill 实际所在位置的脚本绝对路径，例如：
 
 ```powershell
-python -I "C:/Users/Shugu/Desktop/lesson-splitter/scripts/split_lesson.py" "C:/Users/Shugu/Videos/精选5个" --target 6
+python -I "<skill目录>/scripts/split_lesson.py" "<课程文件夹>" --target 6
 ```
 
 - `--target`：目标分钟数，默认 6，必须大于 0；不是严格上限。
