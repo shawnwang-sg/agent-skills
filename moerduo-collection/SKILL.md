@@ -47,26 +47,34 @@ description: 整理「磨耳朵」英语听力跟读素材库。两件事:(A) �
 
 ## 模式 B — 磨耳朵.docx 文档格式规范
 
-合集文档是一份**两栏、窄边距、10pt** 的逐行跟读稿。
+合集文档是一份**单栏、带章标题、每章独立分页、首页自动目录**的跟读稿(v2 格式;v1 是两栏 10pt 无标题的旧格式,已弃用)。
 
-**页面 / 段落参数(务必照搬,新建/追加都用)**
+**页面 / sectPr(单栏)**
 - 纸张 US Letter:`<w:pgSz w:w="12240" w:h="15840"/>`
-- 两栏:`<w:cols w:num="2" w:space="432"/>`
-- 边距:`<w:pgMar w:top="288" w:right="432" w:bottom="288" w:left="432" w:header="720" w:footer="720"/>`(上下 0.2″、左右 0.3″)
-- 字号 **20 半角点(=10pt)**,默认 zh-CN 字体;单倍行距 `line=240`、`after=0`
+- **单栏**:`<w:cols w:space="720"/>`(不要 `w:num="2"`)
+- 边距:`<w:pgMar w:top="1440" w:right="1080" w:bottom="1440" w:left="1080" w:header="720" w:footer="720"/>`(上下 1″、左右 0.75″)
 
-**结构**
-- 每集 = 一个**纯数字行** `NNN`(三位,如 `057`),其下是该集文本,**每个意群行各占一段**。
-- 集与集之间用**一个空段**分隔。
+**章标题(每章一个,进目录)**
+- 文本 = `NNN　标题`(全角空格分隔,如 `057　直接的权力`)。**标题 ≤10 个汉字**,读该集内容后拟定(见模式 C)。
+- 用 `Heading1` 样式 + `<w:pageBreakBefore/>` + `<w:outlineLvl w:val="0"/>` + 居中加粗 16pt(`sz=32`)。pageBreakBefore 实现「每章独立分页」,outlineLvl/Heading1 让 TOC 域能收录。
+- styles.xml 若无 `Heading1` 样式,注入一个(`name=heading 1`,`outlineLvl 0`,`b`,`sz 32`)。
 
-**段落 XML 模板**(每行文本/数字行/空行都用它):
+**正文行**:字号 **22 半角点(=11pt)**;`spacing after=40 line=264 lineRule=auto`;每意群行一段,长停顿处空段分段。
+
+**首页目录(TOC 域 + 自动页码)**
+- 封面行:`磨耳朵 · 英语跟读合集`(22pt 粗)、`目录`(16pt 粗)、一行提示「页码未显示请按 F9 更新域」。
+- TOC 域:`<w:fldSimple w:instr=' TOC \o "1-1" \h \z \u '>…占位…</w:fldSimple>`(instr 用单引号包,内含双引号)。
+- **关键**:改 `word/settings.xml`,在 `<w:settings…>` 后插 `<w:updateFields w:val="true"/>` —— Word 打开时自动重算目录与页码。
+
+**段落 XML 模板**
 ```
-RPR = '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="x-none"/></w:rPr>'
-文本段: <w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>{RPR}</w:pPr><w:r>{RPR}<w:t xml:space="preserve">{escape(文本)}</w:t></w:r></w:p>
-空  段: <w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>{RPR}</w:pPr></w:p>
+正文段: <w:p><w:pPr><w:spacing w:after="40" w:line="264" w:lineRule="auto"/><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">{escape(文本)}</w:t></w:r></w:p>
+章标题: <w:p><w:pPr><w:pStyle w:val="Heading1"/><w:pageBreakBefore/><w:outlineLvl w:val="0"/><w:jc w:val="center"/><w:spacing w:before="120" w:after="160"/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">{escape(NNN　标题)}</w:t></w:r></w:p>
 ```
 
-**实现方式**:不用 docx-js;直接读 `磨耳朵.docx`(zip)→ 改 `word/document.xml` → 重新打包,**保留 styles.xml 等其它条目**。注入点:`<w:body>` 之后、最后一个 `<w:sectPr` 之前。
+**实现方式**:不用 docx-js;读 `磨耳朵.docx`(zip)→ 重写 `word/document.xml`(整段 body + 单栏 sectPr)、按需补 `styles.xml`(Heading1)和 `settings.xml`(updateFields)→ 重新打包,其余条目原样保留。**整套见 `scripts/build_collection.py`**。
+
+> ⚠️ **文件锁**:`磨耳朵.docx` 在 Word 里打开时会被锁(`PermissionError`),无法覆盖。写之前先 `open(path,'r+b')` 探测;锁住就让用户关掉 Word(并等 OneDrive 同步完),或先写到临时文件验证、解锁后再覆盖。
 
 ---
 
@@ -93,11 +101,16 @@ RPR = '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="x-none"/></w:
 1. 解析 `.bak`,取每个集号**首次出现**下的内容(`002–032` 等仅在 docx 的集从这里取)。
 2. 有 srt 的集从 srt 重排(更干净,带时间戳)。
 3. **删掉**重复空集号 / 垃圾块。
-4. **边界丢失、无 srt、拆不出来的内容** → 原样塞进文末「**待拆分附录**」,一字不丢,等以后补了 srt 再归位。**绝不为了整齐而丢内容**。
-5. 按 001→061 顺序重排正文,附录在最后。
-6. 写完做校验:`xml.dom.minidom.parseString` 检查 well-formed;打印集号顺序;抽查 2–3 集内容。
+4. **边界丢失、无 srt、拆不出来的内容** → 原样塞进文末「**待拆分附录**」(也作为一章,带标题进目录),一字不丢,等以后补了 srt 再归位。**绝不为了整齐而丢内容**。
+5. 按 001→061 顺序重排正文,附录在最后,套用模式 B 的 v2 排版(章标题 + 分页 + 目录)。
+6. 写完做校验:`xml.dom.minidom.parseString` 检查 document/styles/settings well-formed;确认章标题数 = 章数、`pageBreakBefore` 数相符、TOC 域存在;抽查 2–3 集内容。
 
-参考实现见 `scripts/append_to_collection.py`(把若干集 srt 按格式追加进 docx)和 `scripts/rebuild_collection.py`(完整重建 + 附录的骨架)。
+### 章标题怎么拟(≤10 个汉字)
+- 每章一个,**读该集内容**后用中文概括主题,4–7 字最佳、**不超过 10 字**。是对话场景就抓情境(如 `谁来看孩子`、`餐厅等位`),是观点/演讲就抓主旨(如 `悲观的毛病`、`金钱与情绪`)。
+- 标题只是导航/概览,**不算改原文**;正文仍逐字不动。
+- 批量拟标题时,先把每章前 ~14 行抽到一个文本文件通读,再一次性产出标题表(见 `build_collection.py` 里的 `TITLES` 字典)。
+
+**完整实现见 `scripts/build_collection.py`**(v2 全量重建:srt+.bak 取材、重排、章标题+分页、TOC 域、附录、锁检测,一步到位)。日常基本只用它——改完 srt 或标题后重跑即可。`scripts/append_to_collection.py` 是旧的「仅追加」脚本(v1 格式,无标题/分页),已被全量重建取代,保留备查。
 
 ---
 

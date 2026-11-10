@@ -33,6 +33,9 @@ agent-skills/
 | [quote-collection-publish](./quote-collection-publish) | 名言/摘抄 txt → 分类、去重、润色（附对照页）→ A4 双栏分页 PDF（一页一集）+ 每集 MP3 朗读（edge-tts）+ TXT + MOBI，四者分集分段一致。 |
 | [quote-wallpaper](./quote-wallpaper) | 名言 → 桌面文字壁纸，每条一张；右上角固定磨砂玻璃框（≤100 字横条框，101–300 字大框），字号自动取最大。 |
 | [jiayanchao-import](./jiayanchao-import) | 名言批量导入本地 growth-planner「嘉言钞」：宽松去重、长段拆短句、拆出处，写前自动备份。 |
+| [snippet-collection](./snippet-collection) | 图文截图、书法图片、零散文字 → 一份干净的「原文集锦」txt：识别原文，去话题标签/水印/账号，按段落重排加标点，按主题分类带目录。 |
+| [moerduo-collection](./moerduo-collection) | 「磨耳朵」英语听力素材库：单集文件夹搬运改名进合集；`磨耳朵.docx` 全量重建成单栏、每章分页、带章标题和自动目录的跟读稿。 |
+| [lesson-splitter](./lesson-splitter) | MP3 英语课程按约 6 分钟均衡切分，同步切分同名英文 SRT，并生成 Word 文稿；附 yt-dlp 下载频道热门视频和英文字幕的参考。 |
 | [douyin-yuedu](./douyin-yuedu) | Turn Douyin-favorite video transcripts (from the local douyin-fav-study app) into a reading edition `yuedu.html`: fix ASR typos, drop filler words, add punctuation without rewriting (≤~10% change), lay out paragraphs/headings/lists/dialogue/gold quote, group by favorite folder → category → topic, and list misfiled and low-information items separately. Re-runs incrementally every ~100 new transcripts. |
 
 ## Glossaries
