@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""把名言导入 growth-planner 的嘉言钞（data/data.json 里的 quotes 数组），自动去重、拆长段、拆出处。
+"""把名言导入 growth-planner 的嘉言钞（个人 meta 里 data.json 的 quotes 数组），自动去重、拆长段、拆出处。
 
 用法：
-  python import_quotes.py <输入> --source 厉害文字集锦 [--data C:\\Users\\Shugu\\growth-planner\\data\\data.json] [--dry-run]
+  python import_quotes.py <输入> --source 厉害文字集锦 [--data <个人 meta>\\data.json，默认读 growth-planner 的绑定>] [--dry-run]
 输入可以是：quote-collection-publish 的 pages.json（含附录 extract）、JSON 字符串列表、或空行分隔的 txt。
 
 规则：
-  - 改写前先备份 data.json → data.backup-<时间>.json；只追加，不改原有句子；保留原文件换行风格
+  - 改写前先备份 data.json → 同目录 backups/data.backup-<时间>.json（不进 Git）；只追加，不改原有句子；保留原文件换行风格
   - 去重 key：NFKC 归一化后去掉空白和标点、转小写；与库里任意一句互相包含（≥10 字）、
     或匹配字数占 ≥70%、或相似度 ≥0.6 都算重复（整条先比，拆分后的片段再比一次）
   - 超过 MAX+40 字（默认 160）的长段按句子拆成 ≤MAX（120）字左右的几句；单句超长在逗号处再拆
@@ -18,7 +18,14 @@ import argparse, datetime, difflib, json, os, re, shutil, unicodedata, uuid
 ap = argparse.ArgumentParser()
 ap.add_argument("input")
 ap.add_argument("--source", required=True, help="没有出处时填的来源名，一般是集锦标题")
-ap.add_argument("--data", default=r"C:\Users\Shugu\growth-planner\data\data.json")
+def _bound_data():
+    # growth-planner 绑定的个人 meta 文件夹（现在是 self-meta 仓库里的 growth-planner/）
+    try:
+        with open(r"C:\Users\Shugu\growth-planner\storage.local.json.meta.json", encoding="utf-8") as f:
+            return os.path.join(json.load(f)["directory"], "data.json")
+    except Exception:
+        return r"C:\Users\Shugu\OneDrive\self-meta\growth-planner\data.json"
+ap.add_argument("--data", default=_bound_data())
 ap.add_argument("--max", type=int, default=120)
 ap.add_argument("--dry-run", action="store_true", help="只统计，不写文件")
 A = ap.parse_args()
@@ -109,7 +116,8 @@ for x in add[:5]:
     print("  +", x["text"][:40], "｜", x["source"])
 if A.dry_run or not add:
     print("（未写入）" if A.dry_run else "没有新句子，未写入"); raise SystemExit
-bak = os.path.join(os.path.dirname(A.data), f"data.backup-{datetime.datetime.now():%Y%m%d-%H%M%S}.json")
+os.makedirs(os.path.join(os.path.dirname(A.data), "backups"), exist_ok=True)
+bak = os.path.join(os.path.dirname(A.data), "backups", f"data.backup-{datetime.datetime.now():%Y%m%d-%H%M%S}.json")
 shutil.copy2(A.data, bak)
 quotes += add
 nl = "\r\n" if "\r\n" in raw else "\n"
