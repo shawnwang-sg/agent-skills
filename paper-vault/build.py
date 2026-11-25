@@ -166,6 +166,7 @@ body.fview-venue .fbar .fbtn, body.fview-author .fbar .fbtn{display:none;}
 .vcard .vlinks a{display:inline-block; margin:4px 8px 0 0; padding:3px 12px; border:1px solid var(--line); border-radius:8px;
   color:var(--ink); text-decoration:none; background:var(--paper);}
 .vcard .vlinks a:hover{border-color:var(--accent);}
+.uibtn{font-size:12px; font-weight:600; letter-spacing:.02em; min-width:34px;}
 @media(max-width:760px){
   .libwrap{flex-direction:column; padding:0 16px; gap:0;}
   .folders{position:static; flex:none; width:100%; max-height:none; display:flex; flex-wrap:wrap; gap:4px;}
@@ -440,11 +441,41 @@ FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><re
 LIBRARY_JS = r"""
 /* paper-vault library.js —— L1 行为 */
 (function(){
+  // ── 界面语言（中 / EN）：存在 localStorage.pv_ui，切换后刷新页面 ──
+  var UI = (function(){ try { return localStorage.getItem("pv_ui") === "en" ? "en" : "zh"; } catch(e) { return "zh"; } })();
+  function T(zh, en){ return UI === "en" ? en : zh; }
+  function X(o, k){ return UI === "en" && o && o[k + "_en"] != null ? o[k + "_en"] : (o || {})[k]; }   // 数据里的 *_en 字段
+  document.documentElement.setAttribute("data-ui", UI);
+  if (UI === "en") {
+    document.documentElement.lang = "en";
+    document.querySelectorAll("[data-en]").forEach(function(el){ el.textContent = el.getAttribute("data-en"); });
+    document.querySelectorAll("[data-en-ph]").forEach(function(el){ el.placeholder = el.getAttribute("data-en-ph"); });
+    document.querySelectorAll("[data-en-title]").forEach(function(el){ el.title = el.getAttribute("data-en-title"); });
+    document.querySelectorAll(".pv-use-notice").forEach(function(n){
+      var a = n.querySelector("a"), href = a ? a.getAttribute("href") : "";
+      var full = !!n.querySelector("strong");
+      n.innerHTML = (full ? "<div><strong>Personal study notice</strong> · " : "<span>") +
+        "Personal study and research only · non-commercial · not for distribution" +
+        (full ? "<p>Copyright in the papers, figures and other materials belongs to their authors and rights holders. Translations and notes are unofficial study aids; the original text prevails.</p></div>" : "</span>") +
+        (href ? '<a href="' + href + '">Full statement</a>' : "");
+    });
+  }
+  (function(){
+    var host = document.querySelector(".libhead") || document.querySelector(".topbar");
+    if (!host || document.getElementById("uiBtn")) return;
+    var b = document.createElement("button");
+    b.id = "uiBtn"; b.className = "iconbtn uibtn"; b.textContent = UI === "en" ? "中" : "EN";
+    b.title = UI === "en" ? "切换到中文界面" : "Switch to English interface";
+    b.addEventListener("click", function(){ try { localStorage.setItem("pv_ui", UI === "en" ? "zh" : "en"); } catch(e) {} location.reload(); });
+    var theme = host.querySelector("#themeBtn");
+    if (theme) host.insertBefore(b, theme); else host.appendChild(b);
+  })();
+
   // 右下角「i」：打开本库的规划页 roadmap.html（以后要做的事）
   (function(href, bottom){
     if (document.getElementById("roadmap-i")) return;
     var a = document.createElement("a");
-    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = "以后要做的事"; a.textContent = "i";
+    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = T("以后要做的事", "Roadmap"); a.textContent = "i";
     a.style.cssText = "position:fixed;right:16px;bottom:" + bottom + "px;z-index:2147483000;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#A62B26;color:#fff;text-decoration:none;font:italic 700 16px/1 Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.85";
     document.body.appendChild(a);
   })("roadmap.html", 16);
@@ -517,10 +548,10 @@ LIBRARY_JS = r"""
   function save(){
     var body = JSON.stringify({version:1, favorites:favs, reading:reading, tree:tree}, null, 2);
     LS("pv_folders_local", body);
-    if (!served) { setHint("只存在这个浏览器里。用 python serve.py 打开才会存进 folders.json。", true); return; }
+    if (!served) { setHint(T("只存在这个浏览器里。用 python serve.py 打开才会存进 folders.json。", "Saved in this browser only. Open with python serve.py to save to folders.json."), true); return; }
     fetch("api/folders", {method:"POST", headers:{"Content-Type":"application/json"}, body:body})
-      .then(function(r){ if (!r.ok) throw r.status; LS("pv_folders_local", ""); setHint("已保存"); })
-      .catch(function(){ setHint("保存失败：本地服务没开？已先存在浏览器里。", true); });
+      .then(function(r){ if (!r.ok) throw r.status; LS("pv_folders_local", ""); setHint(T("已保存", "Saved")); })
+      .catch(function(){ setHint(T("保存失败：本地服务没开？已先存在浏览器里。", "Save failed: is the local server running? Kept in this browser for now."), true); });
   }
 
   function row(id, name, n, depth, hasKids, node){
@@ -535,9 +566,9 @@ LIBRARY_JS = r"""
     var ct = document.createElement("span"); ct.className = "fcount"; ct.textContent = n;
     r.appendChild(tw); r.appendChild(nm); r.appendChild(ct);
     if (editing && node) {
-      [["＋", "新建子分类", function(){ var s = prompt("子分类名称"); if (s && s.trim()) { node.children.push({id:newId(), name:s.trim(), papers:[], children:[]}); closed[node.id] = false; changed(); } }],
-       ["✎", "改名", function(){ var s = prompt("新名称", node.name); if (s && s.trim()) { node.name = s.trim(); changed(); } }],
-       ["✕", "删除（论文和子分类并到上一级）", function(){ removeNode(node); }]].forEach(function(b){
+      [["＋", T("新建子分类", "New subfolder"), function(){ var s = prompt(T("子分类名称", "Subfolder name")); if (s && s.trim()) { node.children.push({id:newId(), name:s.trim(), papers:[], children:[]}); closed[node.id] = false; changed(); } }],
+       ["✎", T("改名", "Rename"), function(){ var s = prompt(T("新名称", "New name"), node.name); if (s && s.trim()) { node.name = s.trim(); changed(); } }],
+       ["✕", T("删除（论文和子分类并到上一级）", "Delete (papers and subfolders move up a level)"), function(){ removeNode(node); }]].forEach(function(b){
         var x = document.createElement("button"); x.className = "fop"; x.textContent = b[0]; x.title = b[1];
         x.addEventListener("click", function(e){ e.stopPropagation(); b[2](); });
         r.appendChild(x);
@@ -554,7 +585,7 @@ LIBRARY_JS = r"""
 
   function removeNode(node){
     var hit = find(node.id); if (!hit) return;
-    if (!confirm("删除分类「" + node.name + "」？里面的论文和子分类会并到上一级。")) return;
+    if (!confirm(T("删除分类「" + node.name + "」？里面的论文和子分类会并到上一级。", "Delete folder \"" + node.name + "\"? Its papers and subfolders move up a level."))) return;
     var parent = null; walk(tree, function(n){ if (n.children.indexOf(node) >= 0) parent = n; });
     var i = hit.list.indexOf(node);
     hit.list.splice.apply(hit.list, [i, 1].concat(node.children));
@@ -585,11 +616,11 @@ LIBRARY_JS = r"""
 
   function paintTree(){
     treeBox.innerHTML = "";
-    treeBox.appendChild(row(FAV, "★ 收藏", favs.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
-    treeBox.appendChild(row(READ, "◔ 正在读", reading.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
+    treeBox.appendChild(row(FAV, T("★ 收藏", "★ Starred"), favs.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
+    treeBox.appendChild(row(READ, T("◔ 正在读", "◔ Reading"), reading.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
     if (VEN) {
       var seg = E("div", "fview");
-      [["content", "内容"], ["venue", "会议"], ["author", "作者"]].forEach(function(o){
+      [["content", T("内容", "Topics")], ["venue", T("会议", "Venues")], ["author", T("作者", "Authors")]].forEach(function(o){
         var b = E("button", view === o[0] ? "on" : "", o[1]);
         b.addEventListener("click", function(){ setView(o[0]); });
         seg.appendChild(b);
@@ -601,17 +632,17 @@ LIBRARY_JS = r"""
         var vs = VEN.venues.filter(function(v){ return v.group === g && papersOfVenue(v.key).length; })
           .sort(function(a, b){ return (b.score || 0) - (a.score || 0); });
         if (!vs.length) return;
-        treeBox.appendChild(E("div", "fgroup", g));
-        vs.forEach(function(v){ treeBox.appendChild(row("v:" + v.key, v.name + (v.score ? "  ·  " + v.score + " 分" : ""), papersOfVenue(v.key).length, 0, false, null)); });
+        treeBox.appendChild(E("div", "fgroup", UI === "en" && VEN.groups_en ? (VEN.groups_en[g] || g) : g));
+        vs.forEach(function(v){ treeBox.appendChild(row("v:" + v.key, X(v, "name") + (v.score ? "  ·  " + v.score + T(" 分", "/10") : ""), papersOfVenue(v.key).length, 0, false, null)); });
       });
     } else if (view === "author") {
       var ac = authorCounts(), names = Object.keys(ac).filter(function(a){ return ac[a] >= 2; });
       names.sort(function(a, b){ return ac[b] - ac[a] || a.localeCompare(b); });
-      treeBox.appendChild(E("div", "fgroup", "库里有 2 篇以上的作者"));
+      treeBox.appendChild(E("div", "fgroup", T("库里有 2 篇以上的作者", "Authors with 2+ papers here")));
       names.forEach(function(a){ treeBox.appendChild(row("a:" + a, a, ac[a], 0, false, null)); });
-      treeBox.appendChild(E("div", "fhint", "其余 " + (Object.keys(ac).length - names.length) + " 位作者只有 1 篇，可用右上角搜索。"));
+      treeBox.appendChild(E("div", "fhint", T("其余 " + (Object.keys(ac).length - names.length) + " 位作者只有 1 篇，可用右上角搜索。", (Object.keys(ac).length - names.length) + " more authors have 1 paper each; use search at the top right.")));
     } else {
-      treeBox.appendChild(row(ALL, "全部论文", Object.keys(cardOf).length, 0, false, null));
+      treeBox.appendChild(row(ALL, T("全部论文", "All papers"), Object.keys(cardOf).length, 0, false, null));
       (function draw(nodes, depth){
         nodes.forEach(function(n){
           treeBox.appendChild(row(n.id, n.name, count(n), depth, n.children.length > 0, n));
@@ -619,11 +650,11 @@ LIBRARY_JS = r"""
         });
       })(tree, 0);
       var loose = unassigned();
-      if (loose.length) treeBox.appendChild(row(NONE, "未归类", loose.length, 0, false, null));
+      if (loose.length) treeBox.appendChild(row(NONE, T("未归类", "Unfiled"), loose.length, 0, false, null));
     }
     if (VEN && VEN.friend_links && VEN.friend_links.length) {
-      var fl = E("div", "flinks"); fl.appendChild(E("b", "", "友情链接 · 找新论文"));
-      VEN.friend_links.forEach(function(l){ var a = E("a", "", l.name); a.href = l.url; a.target = "_blank"; a.rel = "noopener"; a.title = l.note || ""; fl.appendChild(a); });
+      var fl = E("div", "flinks"); fl.appendChild(E("b", "", T("友情链接 · 找新论文", "Links · find new papers")));
+      VEN.friend_links.forEach(function(l){ var a = E("a", "", X(l, "name")); a.href = l.url; a.target = "_blank"; a.rel = "noopener"; a.title = X(l, "note") || ""; fl.appendChild(a); });
       treeBox.appendChild(fl);
     }
     document.body.classList.toggle("fediting", editing);
@@ -646,33 +677,33 @@ LIBRARY_JS = r"""
   function venueCard(v, n){
     var c = E("div", "vcard");
     if (v.score) {
-      var sc = E("div", "vscore"); sc.appendChild(E("b", "", String(v.score))); sc.appendChild(E("small", "", " / 10 综合评分"));
-      if (VEN.score_note) sc.title = VEN.score_note;
+      var sc = E("div", "vscore"); sc.appendChild(E("b", "", String(v.score))); sc.appendChild(E("small", "", T(" / 10 综合评分", " / 10 overall")));
+      if (VEN.score_note) sc.title = X(VEN, "score_note");
       c.appendChild(sc);
     }
-    c.appendChild(E("div", "vfull", v.full));
+    c.appendChild(E("div", "vfull", X(v, "full")));
     var tags = E("div", "vtags");
-    [v.kind, v.group].concat(v.ccf ? ["CCF " + v.ccf] : []).concat(v.time ? [v.time] : []).forEach(function(t){
+    [X(v, "kind"), X(v, "group")].concat(v.ccf ? ["CCF " + v.ccf] : []).concat(v.time ? [X(v, "time")] : []).forEach(function(t){
       tags.appendChild(E("span", t.indexOf("CCF") === 0 ? "ccf" : "", t));
     });
-    tags.appendChild(E("span", "", "库里 " + n + " 篇"));
+    tags.appendChild(E("span", "", T("库里 " + n + " 篇", n + " in library")));
     c.appendChild(tags);
-    c.appendChild(E("h4", "", "介绍")); c.appendChild(E("p", "", v.intro));
-    if (v.influence) { c.appendChild(E("h4", "", "分量与影响力")); c.appendChild(E("p", "", v.influence)); }
+    c.appendChild(E("h4", "", T("介绍", "About"))); c.appendChild(E("p", "", X(v, "intro")));
+    if (v.influence) { c.appendChild(E("h4", "", T("分量与影响力", "Standing and influence"))); c.appendChild(E("p", "", X(v, "influence"))); }
     if (v.editions && v.editions.length) {
-      c.appendChild(E("h4", "", "时间地点"));
+      c.appendChild(E("h4", "", T("时间地点", "When and where")));
       var t = E("table");
-      v.editions.forEach(function(ed){ var tr = E("tr"); tr.appendChild(E("td", "", String(ed.year))); tr.appendChild(E("td", "", ed.place)); tr.appendChild(E("td", "", ed.dates || "")); t.appendChild(tr); });
+      v.editions.forEach(function(ed){ var tr = E("tr"); tr.appendChild(E("td", "", String(ed.year))); tr.appendChild(E("td", "", X(ed, "place"))); tr.appendChild(E("td", "", X(ed, "dates") || "")); t.appendChild(tr); });
       c.appendChild(t);
     }
-    var links = Object.keys(v.links || {});
+    var LK = X(v, "links") || {}, links = Object.keys(LK);
     if (links.length) {
       var lk = E("div", "vlinks");
-      links.forEach(function(k){ var a = E("a", "", k + " ↗"); a.href = v.links[k]; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); });
+      links.forEach(function(k){ var a = E("a", "", k + " ↗"); a.href = LK[k]; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); });
       c.appendChild(lk);
     }
-    if (VEN.checked && v.editions && v.editions.length) c.appendChild(E("div", "fhint", "时间地点核对于 " + VEN.checked + "，以官网为准。"));
-    if (v.score && VEN.score_note) c.appendChild(E("div", "fhint", VEN.score_note));
+    if (VEN.checked && v.editions && v.editions.length) c.appendChild(E("div", "fhint", T("时间地点核对于 " + VEN.checked + "，以官网为准。", "Dates checked on " + VEN.checked + "; the official site prevails.")));
+    if (v.score && VEN.score_note) c.appendChild(E("div", "fhint", X(VEN, "score_note")));
     return c;
   }
 
@@ -680,11 +711,11 @@ LIBRARY_JS = r"""
     var c = E("div", "vcard"), co = {};
     slugs.forEach(function(s){ (facets[s].a || []).forEach(function(x){ if (x !== a) co[x] = (co[x] || 0) + 1; }); });
     var vs = {}; slugs.forEach(function(s){ var k = facets[s].v; if (k) vs[k] = (vs[k] || 0) + 1; });
-    var tags = E("div", "vtags"); tags.appendChild(E("span", "", "库里 " + slugs.length + " 篇"));
-    Object.keys(vs).forEach(function(k){ tags.appendChild(E("span", "", (venOf[k] || {}).name + " × " + vs[k])); });
+    var tags = E("div", "vtags"); tags.appendChild(E("span", "", T("库里 " + slugs.length + " 篇", slugs.length + " in library")));
+    Object.keys(vs).forEach(function(k){ tags.appendChild(E("span", "", X(venOf[k], "name") + " × " + vs[k])); });
     c.appendChild(tags);
     var top = Object.keys(co).sort(function(x, y){ return co[y] - co[x]; }).slice(0, 12);
-    if (top.length) { c.appendChild(E("h4", "", "库里的合作者")); c.appendChild(E("p", "", top.join("、"))); }
+    if (top.length) { c.appendChild(E("h4", "", T("库里的合作者", "Co-authors here"))); c.appendChild(E("p", "", top.join(T("、", ", ")))); }
     var lk = E("div", "vlinks"), q = encodeURIComponent(a);
     [["DBLP", "https://dblp.org/search?q=" + q], ["Google Scholar", "https://scholar.google.com/scholar?q=author%3A%22" + q + "%22"], ["Semantic Scholar", "https://www.semanticscholar.org/search?q=" + q]].forEach(function(x){
       var l = E("a", "", x[0] + " ↗"); l.href = x[1]; l.target = "_blank"; l.rel = "noopener"; lk.appendChild(l);
@@ -696,7 +727,7 @@ LIBRARY_JS = r"""
   function putByYear(slugs){
     var last = null;
     byYear(slugs).forEach(function(s){
-      var y = (facets[s] || {}).y || "年份不详";
+      var y = (facets[s] || {}).y || T("年份不详", "Year unknown");
       if (y !== last) { cardsBox.appendChild(E("h3", "subhead", String(y))); last = y; }
       cardsBox.appendChild(cardOf[s]);
     });
@@ -723,14 +754,14 @@ LIBRARY_JS = r"""
       put(n.papers, cardsBox);
       n.children.forEach(function(c){ section(c, (path ? path + " / " : "") + c.name); });
     }
-    if (id === FAV) { titleEl.textContent = "★ 收藏"; put(favs, cardsBox); }
-    else if (id === READ) { titleEl.textContent = "◔ 正在读"; put(reading, cardsBox); }
-    else if (id === ALL) { titleEl.textContent = "全部论文"; tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
-    else if (id === NONE) { titleEl.textContent = "未归类"; put(unassigned(), cardsBox); }
-    else if (/^v:/.test(id)) { var v = venOf[id.slice(2)], vs = papersOfVenue(v.key); titleEl.textContent = v.name; cardsBox.appendChild(venueCard(v, vs.length)); putByYear(vs); }
+    if (id === FAV) { titleEl.textContent = T("★ 收藏", "★ Starred"); put(favs, cardsBox); }
+    else if (id === READ) { titleEl.textContent = T("◔ 正在读", "◔ Reading"); put(reading, cardsBox); }
+    else if (id === ALL) { titleEl.textContent = T("全部论文", "All papers"); tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
+    else if (id === NONE) { titleEl.textContent = T("未归类", "Unfiled"); put(unassigned(), cardsBox); }
+    else if (/^v:/.test(id)) { var v = venOf[id.slice(2)], vs = papersOfVenue(v.key); titleEl.textContent = X(v, "name"); cardsBox.appendChild(venueCard(v, vs.length)); putByYear(vs); }
     else if (/^a:/.test(id)) { var an = id.slice(2), as = papersOfAuthor(an); titleEl.textContent = an; cardsBox.appendChild(authorCard(an, as)); putByYear(as); }
     else { var n = find(id).node; titleEl.textContent = n.name; section(n, ""); }
-    if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">' + (id === FAV ? "还没有收藏。点论文标题右边的 ☆ 就能收藏。" : id === READ ? "还没有在读的论文。点论文标题右边的「在读」就能加进来。" : "这个分类还没有论文。" + (editing ? "把右边的论文拖到左边分类上即可移动。" : "")) + "</p>";
+    if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">' + (id === FAV ? T("还没有收藏。点论文标题右边的 ☆ 就能收藏。", "Nothing starred yet. Click ☆ next to a paper title.") : id === READ ? T("还没有在读的论文。点论文标题右边的「在读」就能加进来。", "Nothing in Reading yet. Click \"Reading\" next to a paper title.") : T("这个分类还没有论文。", "No papers in this folder yet.") + (editing ? T("把右边的论文拖到左边分类上即可移动。", " Drag a paper onto a folder to move it.") : "")) + "</p>";
     paintStars();
     paintTree();
   }
@@ -741,9 +772,9 @@ LIBRARY_JS = r"""
   function paintStars(){
     Object.keys(cardOf).forEach(function(s){
       var b = cardOf[s].querySelector(".star"), on = favs.indexOf(s) >= 0;
-      if (b) { b.textContent = on ? "★" : "☆"; b.classList.toggle("on", on); b.title = on ? "取消收藏" : "收藏"; }
+      if (b) { b.textContent = on ? "★" : "☆"; b.classList.toggle("on", on); b.title = on ? T("取消收藏", "Unstar") : T("收藏", "Star"); }
       var r = cardOf[s].querySelector(".readtag"), rd = reading.indexOf(s) >= 0;
-      if (r) { r.classList.toggle("on", rd); r.title = rd ? "移出「正在读」" : "标为正在读"; }
+      if (r) { r.classList.toggle("on", rd); r.title = rd ? T("移出「正在读」", "Remove from Reading") : T("标为正在读", "Mark as reading"); r.textContent = T("在读", "Reading"); }
     });
   }
   Object.keys(cardOf).forEach(function(s){
@@ -777,8 +808,8 @@ LIBRARY_JS = r"""
     Object.keys(cardOf).forEach(function(s){ pool.appendChild(cardOf[s]); });
     cardsBox.innerHTML = "";
     hits.forEach(function(s){ cardsBox.appendChild(cardOf[s]); });
-    titleEl.textContent = "搜索「" + query + "」· " + hits.length + " 篇";
-    if (!hits.length) cardsBox.innerHTML = '<p class="fempty">没有找到。可以试试英文关键词、作者名或编号（如 L26）。</p>';
+    titleEl.textContent = T("搜索「" + query + "」· " + hits.length + " 篇", "Search \"" + query + "\" · " + hits.length);
+    if (!hits.length) cardsBox.innerHTML = '<p class="fempty">' + T("没有找到。可以试试英文关键词、作者名或编号（如 L26）。", "Nothing found. Try English keywords, an author or an ID such as L26.") + '</p>';
     paintStars(); paintTree();
   }
   if (searchBox) {
@@ -790,13 +821,13 @@ LIBRARY_JS = r"""
     });
   }
   document.getElementById("fEdit").addEventListener("click", function(e){
-    editing = !editing; e.target.textContent = editing ? "完成" : "编辑";
-    if (editing) setHint("拖论文到分类上 = 移动；拖分类到分类上 = 变成子分类，拖到「全部论文」= 回顶层。");
+    editing = !editing; e.target.textContent = editing ? T("完成", "Done") : T("编辑", "Edit");
+    if (editing) setHint(T("拖论文到分类上 = 移动；拖分类到分类上 = 变成子分类，拖到「全部论文」= 回顶层。", "Drag a paper onto a folder to move it; drag a folder onto another to nest it, onto All papers to move it to the top."));
     else setHint("");
     open(current);
   });
   document.getElementById("fAdd").addEventListener("click", function(){
-    var s = prompt("新分类名称"); if (!s || !s.trim()) return;
+    var s = prompt(T("新分类名称", "New folder name")); if (!s || !s.trim()) return;
     var n = {id:newId(), name:s.trim(), papers:[], children:[]}; tree.push(n); current = n.id; changed();
   });
 
@@ -823,12 +854,42 @@ LIBRARY_JS = r"""
 READER_JS = r"""
 /* paper-vault reader.js —— L2 翻页阅读器行为 */
 (function(){
+  // ── 界面语言（中 / EN）：存在 localStorage.pv_ui，切换后刷新页面 ──
+  var UI = (function(){ try { return localStorage.getItem("pv_ui") === "en" ? "en" : "zh"; } catch(e) { return "zh"; } })();
+  function T(zh, en){ return UI === "en" ? en : zh; }
+  function X(o, k){ return UI === "en" && o && o[k + "_en"] != null ? o[k + "_en"] : (o || {})[k]; }   // 数据里的 *_en 字段
+  document.documentElement.setAttribute("data-ui", UI);
+  if (UI === "en") {
+    document.documentElement.lang = "en";
+    document.querySelectorAll("[data-en]").forEach(function(el){ el.textContent = el.getAttribute("data-en"); });
+    document.querySelectorAll("[data-en-ph]").forEach(function(el){ el.placeholder = el.getAttribute("data-en-ph"); });
+    document.querySelectorAll("[data-en-title]").forEach(function(el){ el.title = el.getAttribute("data-en-title"); });
+    document.querySelectorAll(".pv-use-notice").forEach(function(n){
+      var a = n.querySelector("a"), href = a ? a.getAttribute("href") : "";
+      var full = !!n.querySelector("strong");
+      n.innerHTML = (full ? "<div><strong>Personal study notice</strong> · " : "<span>") +
+        "Personal study and research only · non-commercial · not for distribution" +
+        (full ? "<p>Copyright in the papers, figures and other materials belongs to their authors and rights holders. Translations and notes are unofficial study aids; the original text prevails.</p></div>" : "</span>") +
+        (href ? '<a href="' + href + '">Full statement</a>' : "");
+    });
+  }
+  (function(){
+    var host = document.querySelector(".libhead") || document.querySelector(".topbar");
+    if (!host || document.getElementById("uiBtn")) return;
+    var b = document.createElement("button");
+    b.id = "uiBtn"; b.className = "iconbtn uibtn"; b.textContent = UI === "en" ? "中" : "EN";
+    b.title = UI === "en" ? "切换到中文界面" : "Switch to English interface";
+    b.addEventListener("click", function(){ try { localStorage.setItem("pv_ui", UI === "en" ? "zh" : "en"); } catch(e) {} location.reload(); });
+    var theme = host.querySelector("#themeBtn");
+    if (theme) host.insertBefore(b, theme); else host.appendChild(b);
+  })();
+
 
   // 右下角「i」：打开本库的规划页 roadmap.html（以后要做的事）
   (function(href, bottom){
     if (document.getElementById("roadmap-i")) return;
     var a = document.createElement("a");
-    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = "以后要做的事"; a.textContent = "i";
+    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = T("以后要做的事", "Roadmap"); a.textContent = "i";
     a.style.cssText = "position:fixed;right:16px;bottom:" + bottom + "px;z-index:2147483000;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#A62B26;color:#fff;text-decoration:none;font:italic 700 16px/1 Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.85";
     document.body.appendChild(a);
   })("../../roadmap.html", 44);
@@ -1058,11 +1119,11 @@ READER_JS = r"""
       res.appendChild(E("h5", "", title)); var ul = E("ul");
       items.forEach(function(it){ var li = E("li"); fn(li, it); ul.appendChild(li); }); res.appendChild(ul);
     }
-    list("✓ 说对了", r.right, function(li, it){ li.textContent = it; });
-    list("△ 漏掉的关键点", r.missed, function(li, it){ li.appendChild(document.createTextNode(it.point || it)); if (it.quote) li.appendChild(E("q", "", it.quote)); });
-    list("✗ 不对的地方", r.wrong, function(li, it){ li.appendChild(document.createTextNode("「" + (it.claim || "") + "」 " + (it.why || ""))); });
-    list("英文表达", r.english, function(li, it){ li.appendChild(document.createTextNode(it.original + " → " + it.better + (it.why ? "（" + it.why + "）" : ""))); });
-    if (r.reference) { var d = E("details"); d.appendChild(E("summary", "", "看参考概括")); d.appendChild(E("p", "", r.reference)); res.appendChild(d); }
+    list(T("✓ 说对了", "✓ Got right"), r.right, function(li, it){ li.textContent = it; });
+    list(T("△ 漏掉的关键点", "△ Missed points"), r.missed, function(li, it){ li.appendChild(document.createTextNode(it.point || it)); if (it.quote) li.appendChild(E("q", "", it.quote)); });
+    list(T("✗ 不对的地方", "✗ Not quite right"), r.wrong, function(li, it){ li.appendChild(document.createTextNode("「" + (it.claim || "") + "」 " + (it.why || ""))); });
+    list(T("英文表达", "English wording"), r.english, function(li, it){ li.appendChild(document.createTextNode(it.original + " → " + it.better + (it.why ? "（" + it.why + "）" : ""))); });
+    if (r.reference) { var d = E("details"); d.appendChild(E("summary", "", T("看参考概括", "Show a reference summary"))); d.appendChild(E("p", "", r.reference)); res.appendChild(d); }
   }
   function sumBox(mk, sec, opts){
     var key = mk + ":" + sec.idx, hist = ((NOTES[SLUG] || {})[key]) || [], last = hist[hist.length - 1];
@@ -1070,33 +1131,33 @@ READER_JS = r"""
     var box = E("div", "mysum"); box.hidden = true;
     function label(){
       var l = hist[hist.length - 1], r = l && l.result;
-      tg.textContent = "✍ " + (l ? opts.head + (r ? " · " + r.score + "/10" : " · 已写") : opts.btn);
+      tg.textContent = "✍ " + (l ? opts.head + (r ? " · " + r.score + "/10" : T(" · 已写", " · written")) : opts.btn);
     }
     label();
     tg.addEventListener("click", function(){ box.hidden = !box.hidden; tg.classList.toggle("on", !box.hidden); if (!box.hidden) ta.focus(); });
     wrap.appendChild(tg); wrap.appendChild(box);
     var h = E("div", "ms-head", opts.head); h.appendChild(E("span", "ms-sub", opts.sub)); box.appendChild(h);
     var ta = E("textarea"); ta.placeholder = opts.ph; if (last) ta.value = last.text; box.appendChild(ta);
-    var bar = E("div", "ms-bar"), bj = E("button", "primary", "提交并评分"), bs = E("button", "", "只保存"), st = E("span", "ms-st");
+    var bar = E("div", "ms-bar"), bj = E("button", "primary", T("提交并评分", "Submit for a score")), bs = E("button", "", T("只保存", "Save only")), st = E("span", "ms-st");
     bar.appendChild(bj); bar.appendChild(bs);
-    var bc = E("button", "", "收起"); bc.addEventListener("click", function(){ box.hidden = true; tg.classList.remove("on"); }); bar.appendChild(bc);
+    var bc = E("button", "", T("收起", "Close")); bc.addEventListener("click", function(){ box.hidden = true; tg.classList.remove("on"); }); bar.appendChild(bc);
     bar.appendChild(st); box.appendChild(bar); box.appendChild(E("div", "ms-res"));
-    if (hist.length) st.textContent = "已写过 " + hist.length + " 次，最近 " + last.at;
-    if (!served) { st.textContent = "用 python serve.py 打开才能保存和评分"; bj.disabled = bs.disabled = true; }
+    if (hist.length) st.textContent = T("已写过 " + hist.length + " 次，最近 " + last.at, "Written " + hist.length + "×, last " + last.at);
+    if (!served) { st.textContent = T("用 python serve.py 打开才能保存和评分", "Open with python serve.py to save and score"); bj.disabled = bs.disabled = true; }
     renderResult(box, last);
     function send(api){
-      var text = ta.value.trim(); if (!text) { st.textContent = "先写几句再提交"; return; }
-      bj.disabled = bs.disabled = true; st.textContent = api === "judge" ? "评分中，约 20–60 秒…" : "保存中…";
+      var text = ta.value.trim(); if (!text) { st.textContent = T("先写几句再提交", "Write something first"); return; }
+      bj.disabled = bs.disabled = true; st.textContent = api === "judge" ? T("评分中，约 20–60 秒…", "Scoring, about 20–60 s…") : T("保存中…", "Saving…");
       fetch("../../api/" + api, {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({slug:SLUG, mode:mk, sec:sec.idx, title:sec.title, text:text})})
         .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
         .then(function(d){
           (NOTES[SLUG] = NOTES[SLUG] || {})[key] = hist.concat([d.entry]); hist = NOTES[SLUG][key];
-          st.textContent = (api === "judge" ? "已评分" : "已保存") + " · " + d.entry.at;
+          st.textContent = (api === "judge" ? T("已评分", "Scored") : T("已保存", "Saved")) + " · " + d.entry.at;
           if (d.entry.result) renderResult(box, d.entry);
           label();
         })
-        .catch(function(e){ st.textContent = "失败：" + e.message; })
+        .catch(function(e){ st.textContent = T("失败：", "Failed: ") + e.message; })
         .then(function(){ bj.disabled = bs.disabled = false; });
     }
     bj.addEventListener("click", function(){ send("judge"); });
@@ -1107,11 +1168,11 @@ READER_JS = r"""
     if (!SLUG) return;
     sections("grasp").forEach(function(sec){
       var col = sec.pages[sec.pages.length - 1].querySelector(".col"); if (!col) return;
-      col.appendChild(sumBox("grasp", sec, {btn:"写这一节的概括", head:"我的概括", sub:"用自己的话写：这一节在说什么、靠什么证据。中英文都行。", ph:"这一节说的是……"}));
+      col.appendChild(sumBox("grasp", sec, {btn:T("写这一节的概括", "Summarize this section"), head:T("我的概括", "My summary"), sub:T("用自己的话写：这一节在说什么、靠什么证据。中英文都行。", "In your own words: what this section says and what backs it up. Chinese or English."), ph:T("这一节说的是……", "This section says…")}));
     });
     sections("skim").forEach(function(sec){
       var pg = sec.pages[0]; if (!pg.classList.contains("page--conclusion")) return;
-      pg.querySelector(".col").appendChild(sumBox("skim", sec, {btn:"写我的一句话", head:"我的一句话", sub:"用一句话说：这篇论文解决了什么、靠什么、结果如何。", ph:"这篇论文……"}));
+      pg.querySelector(".col").appendChild(sumBox("skim", sec, {btn:T("写我的一句话", "Write my one-liner"), head:T("我的一句话", "My one-liner"), sub:T("用一句话说：这篇论文解决了什么、靠什么、结果如何。", "One sentence: what the paper solves, how, and with what result."), ph:T("这篇论文……", "This paper…")}));
     });
   }
 
@@ -1135,10 +1196,10 @@ READER_JS = r"""
         source:{app:"paper-vault", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
       .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
       .then(function(d){
-        if (kind === "word") { var w = d.word || {}; toast("已收进雅言堂 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
-        else toast("已收进雅言堂的难句本，打开雅言堂可看主干拆解。");
+        if (kind === "word") { var w = d.word || {}; toast(T("已收进雅言堂 · 学术英语：", "Saved to Calliope Hall · academic words: ") + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
+        else toast(T("已收进雅言堂的难句本，打开雅言堂可看主干拆解。", "Saved to Calliope Hall's hard sentences; open it there for a breakdown."));
       })
-      .catch(function(e){ toast("没收成：" + e.message); });
+      .catch(function(e){ toast(T("没收成：", "Not saved: ") + e.message); });
   }
   if (served) document.addEventListener("mouseup", function(e){
     if (e.target.closest && (e.target.closest(".pick") || e.target.closest(".mysum"))) return;
@@ -1151,8 +1212,8 @@ READER_JS = r"""
       var rect = sel.getRangeAt(0).getBoundingClientRect(), words = text.split(" ").length;
       pick = E("div", "pick");
       var sentence = sentenceOf(host.textContent, text);
-      if (words <= 4) { var bw = E("button", "", "＋ 收藏词"); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
-      var bsn = E("button", "", "＋ 收藏句"); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
+      if (words <= 4) { var bw = E("button", "", T("＋ 收藏词", "＋ Save word")); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
+      var bsn = E("button", "", T("＋ 收藏句", "＋ Save sentence")); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
       document.body.appendChild(pick);
       pick.style.left = Math.max(8, Math.min(window.innerWidth - pick.offsetWidth - 8, rect.left + rect.width / 2 - pick.offsetWidth / 2)) + "px";
       pick.style.top = Math.max(8, rect.top - pick.offsetHeight - 8) + "px";
@@ -1339,13 +1400,14 @@ def render_l2(meta, modes, css_href, reader_href):
     tb_meta = " · ".join([x for x in [authors, source] if x])
 
     mode_order = [("skim", "鸟瞰"), ("grasp", "理解"), ("master", "吃透")]
+    mode_en = {"skim": "Skim", "grasp": "Grasp", "master": "Master"}
     modeseg = "".join(
-        '<button data-mode="%s"%s>%s</button>' % (k, (" class=\"on\"" if i == 0 else ""), lbl)
+        '<button data-mode="%s"%s data-en="%s">%s</button>' % (k, (" class=\"on\"" if i == 0 else ""), mode_en[k], lbl)
         for i, (k, lbl) in enumerate(mode_order) if k in modes
     )
-    langseg = ('<button data-lang="both" class="on">对照</button>'
-               '<button data-lang="en">原文</button>'
-               '<button data-lang="zh">中文</button>')
+    langseg = ('<button data-lang="both" class="on" data-en="Both">对照</button>'
+               '<button data-lang="en" data-en="Original">原文</button>'
+               '<button data-lang="zh" data-en="Chinese">中文</button>')
 
     modes_html = ""
     first = True
@@ -1371,30 +1433,30 @@ def render_l2(meta, modes, css_href, reader_href):
 </head>
 <body class="l2 lang-both">
 <div class="topbar">
-  <a class="home" href="../../index.html" title="返回潜研堂">📚</a>
+  <a class="home" href="../../index.html" title="返回潜研堂" data-en-title="Back to Lyceum Hall">📚</a>
   <span class="tb-title">%(title)s</span>
   <span class="tb-meta">%(tbmeta)s</span>
   %(urllink)s
   <span class="tb-spacer"></span>
   <span class="seg modeseg">%(modeseg)s</span>
   <span class="seg langseg">%(langseg)s</span>
-  <button class="iconbtn" id="tocBtn" title="目录 (T)">☰</button>
-  <button class="iconbtn" id="cardBtn" title="卡片模式 (C)：折叠答案，先猜后翻">卡</button>
-  <button class="iconbtn" id="aMinus" title="缩小">A−</button>
-  <button class="iconbtn" id="aPlus" title="放大">A+</button>
-  <button class="iconbtn" id="themeBtn" title="主题">◐</button>
-  <button class="iconbtn" id="fullBtn" title="全屏 (F)">⤢</button>
+  <button class="iconbtn" id="tocBtn" title="目录 (T)" data-en-title="Contents (T)">☰</button>
+  <button class="iconbtn" id="cardBtn" title="卡片模式 (C)：折叠答案，先猜后翻" data-en-title="Card mode (C): hide answers, guess first" data-en="Q">卡</button>
+  <button class="iconbtn" id="aMinus" title="缩小" data-en-title="Smaller">A−</button>
+  <button class="iconbtn" id="aPlus" title="放大" data-en-title="Larger">A+</button>
+  <button class="iconbtn" id="themeBtn" title="主题" data-en-title="Theme">◐</button>
+  <button class="iconbtn" id="fullBtn" title="全屏 (F)" data-en-title="Full screen (F)">⤢</button>
 </div>
 <div id="progress"></div>
 <nav class="toc"></nav>
-<button class="toc-fab" id="tocFab" title="展开目录">☰</button>
+<button class="toc-fab" id="tocFab" title="展开目录" data-en-title="Show contents">☰</button>
 <div class="modewrap">%(modes)s</div>
 <div class="nav">
-  <button class="prev" title="上一页 (←)">‹</button>
+  <button class="prev" title="上一页 (←)" data-en-title="Previous (←)">‹</button>
   <span class="pageno">1 / 1</span>
-  <button class="next" title="下一页 (→)">›</button>
+  <button class="next" title="下一页 (→)" data-en-title="Next (→)">›</button>
 </div>
-<div class="hint">← → 翻页 · 1/2/3 模式 · L 语言 · T 目录 · F 全屏</div>
+<div class="hint" data-en="← → page · 1/2/3 mode · L language · T contents · F full screen">← → 翻页 · 1/2/3 模式 · L 语言 · T 目录 · F 全屏</div>
 <script src="%(reader)s"></script>
 </body>
 </html>""" % {
@@ -1495,8 +1557,8 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
       <a class="ptitle" href="%(href)s">%(title)s</a>
       <div class="pmeta">%(pmeta)s</div>
     </div>
-    <button class="readtag" title="标为正在读">在读</button>
-    <button class="star" title="收藏">☆</button>
+    <button class="readtag" title="标为正在读" data-en="Reading" data-en-title="Mark as reading">在读</button>
+    <button class="star" title="收藏" data-en-title="Star">☆</button>
   </div>
   <div class="poverview">%(overview)s</div>
 </div>""") % {
@@ -1506,9 +1568,9 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
     tree_json = json.dumps({"tree": tree, "favorites": favorites or [], "reading": reading or [],
                             "venues": venues, "facets": paper_facets(papers, venues) if venues else {}},
                            ensure_ascii=False).replace("</", "<\\/")
-    chips = ('<div class="fbar"><span class="ftitle">分类</span>'
-             '<button class="fbtn" id="fAdd" title="新建分类">＋</button>'
-             '<button class="fbtn" id="fEdit" title="编辑分类树">编辑</button></div>'
+    chips = ('<div class="fbar"><span class="ftitle" data-en="Library">分类</span>'
+             '<button class="fbtn" id="fAdd" title="新建分类" data-en-title="New folder">＋</button>'
+             '<button class="fbtn" id="fEdit" title="编辑分类树" data-en="Edit" data-en-title="Edit folders">编辑</button></div>'
              '<div id="ftree"></div><div class="fhint" id="fHint"></div>')
     groups_html = ('<h2 class="cathead" id="fTitle"></h2><div id="cards"></div>'
                    '<div id="pool" hidden>%s</div>'
@@ -1525,10 +1587,10 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 </head>
 <body class="l1">
 <header class="libhead">
-  <h1 class="libtitle" title="Lyceum Hall">潜研堂</h1>
-  <span class="libcount">%(count)d 篇 · 中英对照</span>
+  <h1 class="libtitle" title="Lyceum Hall" data-en="Lyceum Hall" data-en-title="潜研堂">潜研堂</h1>
+  <span class="libcount" data-en="%(count)d papers · bilingual">%(count)d 篇 · 中英对照</span>
   <span class="spacer"></span>
-  <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" autocomplete="off">
+  <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" data-en-ph="Search papers, authors, IDs (press /)" autocomplete="off">
   <button class="iconbtn" id="themeBtn" title="主题">◐</button>
 </header>
 <div class="libwrap">
