@@ -424,7 +424,7 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 .ms-toggle{border:1px solid var(--line); background:transparent; color:var(--accent2); border-radius:999px; padding:3px 12px;
   font:13px var(--font-zh); cursor:pointer; opacity:.8;}
 .ms-toggle:hover,.ms-toggle.on{opacity:1; border-color:var(--accent2);}
-/* ── 划词收藏 → 语言教练 ── */
+/* ── 划词收藏 → 雅言堂 ── */
 .pick{position:fixed; z-index:50; display:flex; gap:4px; padding:4px; border-radius:9px; background:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 .pick button{border:0; background:transparent; color:var(--page); font:13px var(--font-zh); padding:4px 10px; border-radius:6px; cursor:pointer;}
 .pick button:hover{background:rgba(255,255,255,.15);}
@@ -1115,7 +1115,7 @@ READER_JS = r"""
     });
   }
 
-  // ── 划词收藏 → 语言教练（serve.py 转发到 lang-coach 的 /api/collect）──
+  // ── 划词收藏 → 雅言堂（serve.py 转发到 lang-coach 的 /api/collect）──
   var pick = null;
   function hidePick(){ if (pick) { pick.remove(); pick = null; } }
   function toast(msg){
@@ -1135,8 +1135,8 @@ READER_JS = r"""
         source:{app:"paper-vault", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
       .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
       .then(function(d){
-        if (kind === "word") { var w = d.word || {}; toast("已收进语言教练 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
-        else toast("已收进语言教练的难句本，打开语言教练可看主干拆解。");
+        if (kind === "word") { var w = d.word || {}; toast("已收进雅言堂 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
+        else toast("已收进雅言堂的难句本，打开雅言堂可看主干拆解。");
       })
       .catch(function(e){ toast("没收成：" + e.message); });
   }
@@ -1371,7 +1371,7 @@ def render_l2(meta, modes, css_href, reader_href):
 </head>
 <body class="l2 lang-both">
 <div class="topbar">
-  <a class="home" href="../../index.html" title="返回论文库">📚</a>
+  <a class="home" href="../../index.html" title="返回潜研堂">📚</a>
   <span class="tb-title">%(title)s</span>
   <span class="tb-meta">%(tbmeta)s</span>
   %(urllink)s
@@ -1519,13 +1519,13 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>论文阅读库</title>
+<title>潜研堂 · Lyceum Hall</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="%(css)s">
 </head>
 <body class="l1">
 <header class="libhead">
-  <h1 class="libtitle">论文阅读库</h1>
+  <h1 class="libtitle" title="Lyceum Hall">潜研堂</h1>
   <span class="libcount">%(count)d 篇 · 中英对照</span>
   <span class="spacer"></span>
   <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" autocomplete="off">

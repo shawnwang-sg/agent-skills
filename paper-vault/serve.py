@@ -1,4 +1,4 @@
-"""paper-vault 本地服务：打开论文库，保存首页分类树、章节概括和评分，并把划词收藏转给语言教练。
+"""paper-vault 本地服务：打开潜研堂，保存首页分类树、章节概括和评分，并把划词收藏转给雅言堂。
 
 用法（在 vault 目录里）：python serve.py [--port 8791] [--no-browser] [--coach http://127.0.0.1:5310]
 默认只监听 127.0.0.1；vault 里有 lan.local.json（{"enabled": true, "pin": "...."}）时开局域网，别的设备要输密码。零依赖。
@@ -8,7 +8,7 @@
   GET  /api/notes          读全部章节概括
   POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/paper-vault/，可用环境变量 PAPER_VAULT_META 改）
   POST /api/judge          保存概括并调用本机已登录的 claude CLI 打分（1–10）和点评 → notes.json
-  GET/POST /api/coach/...  转发给语言教练（lang-coach）的 /api/collect 系列接口
+  GET/POST /api/coach/...  转发给雅言堂（lang-coach）的 /api/collect 系列接口
 """
 import argparse
 import hashlib
@@ -55,12 +55,12 @@ LAN = load_lan()
 LAN_TOKEN = hashlib.sha256(("paper-vault:%s" % LAN["pin"]).encode()).hexdigest() if LAN else None
 _fails = {}
 LOGIN_PAGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>论文阅读库</title><style>
+<title>潜研堂</title><style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4ece0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#2b2620}
 form{background:#fffaf2;border:1px solid #e0d5c4;border-radius:14px;padding:28px 24px;width:min(300px,86vw);text-align:center}
-h1{font-size:18px;margin:0 0 16px}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid #e0d5c4;border-radius:10px}
+h1{font-size:18px;margin:0 0 6px}.tip{color:#6f6456;font-size:13px;margin:0 0 14px}input::placeholder{font-size:13px;letter-spacing:0}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid #e0d5c4;border-radius:10px}
 button{margin-top:14px;width:100%;padding:10px;font-size:16px;border:none;border-radius:10px;background:#A62B26;color:#fff}p{color:#A62B26;font-size:14px;min-height:20px;margin:10px 0 0}
-</style></head><body><form id="f"><h1>论文阅读库 · 输入密码</h1><input id="pin" type="password" inputmode="numeric" autocomplete="off" autofocus><button>进入</button><p id="msg"></p></form>
+</style></head><body><form id="f"><h1>潜研堂 · 输入密码</h1><div class="tip">请输入 8 位密码（含大小写字母和特殊符号）</div><input id="pin" type="password" autocomplete="off" placeholder="8 位：大小写字母 + 特殊符号" autofocus><button>进入</button><p id="msg"></p></form>
 <script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();const r=await fetch('/api/lan-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:document.getElementById('pin').value})});
 if(r.ok)location.reload();else document.getElementById('msg').textContent=(await r.json().catch(()=>({}))).error||'不对';};</script></body></html>"""
 
@@ -238,9 +238,9 @@ class Handler(SimpleHTTPRequestHandler):
                 msg = json.loads(e.read().decode("utf-8")).get("error")
             except Exception:
                 msg = None
-            return self.reply(e.code, {"error": msg or "语言教练返回 %d" % e.code})
+            return self.reply(e.code, {"error": msg or "雅言堂返回 %d" % e.code})
         except Exception:
-            return self.reply(503, {"error": "语言教练没开（%s）" % self.coach})
+            return self.reply(503, {"error": "雅言堂没开（%s）" % self.coach})
 
     def lan_gate(self):
         """True = 放行；False = 已经回了登录页 / 401 / 429。"""
@@ -355,7 +355,7 @@ def main():
     ap = argparse.ArgumentParser(description="paper-vault 本地服务")
     ap.add_argument("--port", type=int, default=8791)
     ap.add_argument("--no-browser", action="store_true")
-    ap.add_argument("--coach", default=COACH, help="语言教练的地址（默认 %s）" % COACH)
+    ap.add_argument("--coach", default=COACH, help="雅言堂的地址（默认 %s）" % COACH)
     a = ap.parse_args()
     Handler.coach = a.coach.rstrip("/")
     srv = ThreadingHTTPServer(("0.0.0.0" if LAN else "127.0.0.1", a.port), Handler)
