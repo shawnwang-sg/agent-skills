@@ -62,7 +62,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(400, {"error": "bad json"})
         if not isinstance(data, dict) or not valid_tree(data.get("tree")):
             return self.reply(400, {"error": "bad tree"})
-        out = {"version": 1, "tree": data["tree"]}
+        lists = {}
+        for key in ("favorites", "reading"):
+            v = data.get(key, [])
+            if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+                return self.reply(400, {"error": "bad " + key})
+            lists[key] = v
+        out = {"version": 1, "favorites": lists["favorites"], "reading": lists["reading"], "tree": data["tree"]}
         tmp = FOLDERS.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if FOLDERS.exists():

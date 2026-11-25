@@ -110,6 +110,27 @@ body.lang-zh .zh{color:var(--ink);}           /* zh-only 时把 zh 提为主色 
 .folder.on{background:var(--accent); color:#fff;}
 .folder.on .twist,.folder.on .fcount,.folder.on .fop{color:#fff;}
 .folder.drop{outline:2px dashed var(--accent); outline-offset:-2px;}
+.folder.fav{color:var(--accent); font-weight:600;}
+.folder.fav.on{color:#fff;}
+.libsearch{
+  width:min(360px, 42vw); box-sizing:border-box; padding:7px 12px; border-radius:10px;
+  border:1px solid var(--line); background:var(--card); color:var(--ink);
+  font-size:calc(14px*var(--read)); font-family:var(--font-zh);
+}
+.libsearch:focus{outline:none; border-color:var(--accent);}
+.pcard .star{
+  flex:0 0 auto; background:transparent; border:0; cursor:pointer; padding:0 2px;
+  font-size:22px; line-height:1.2; color:var(--soft);
+}
+.pcard .star:hover,.pcard .star.on{color:var(--gold, #c9a227);}
+.pcard .readtag{
+  flex:0 0 auto; align-self:flex-start; margin-top:4px; cursor:pointer;
+  background:transparent; border:1px solid var(--line); color:var(--soft);
+  border-radius:999px; padding:1px 9px; font-size:12px; font-family:var(--font-zh);
+}
+.pcard .readtag:hover{border-color:var(--accent2); color:var(--accent2);}
+.pcard .readtag.on{background:var(--accent2); border-color:var(--accent2); color:#fff;}
+@media(max-width:760px){ .libsearch{width:100%; order:5;} }
 .folder.all{font-weight:600; border-bottom:1px solid var(--line); border-radius:8px 8px 0 0; margin-bottom:4px;}
 .fhint{color:var(--soft); font-size:12px; padding:6px 8px 2px; line-height:1.6;}
 .fhint:empty{display:none;}
@@ -390,10 +411,11 @@ LIBRARY_JS = r"""
   var titleEl = document.getElementById("fTitle"), hint = document.getElementById("fHint");
   var cardOf = {};
   pool.querySelectorAll(".pcard").forEach(function(c){ cardOf[c.getAttribute("data-slug")] = c; });
-  var ALL = "__all__", NONE = "__none__";
+  var ALL = "__all__", NONE = "__none__", FAV = "__fav__", READ = "__reading__";
   var LS = function(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e) { return null; } };
-  var embedded = JSON.parse(document.getElementById("pv-folders").textContent).tree;
-  var tree = embedded, editing = false, current = LS("pv_folder") || "";
+  var embedded = JSON.parse(document.getElementById("pv-folders").textContent);
+  var tree = embedded.tree, favs = embedded.favorites || [], reading = embedded.reading || [], editing = false, current = LS("pv_folder") || "";
+  var query = "", searchBox = document.getElementById("q");
   var closed = {}; try { closed = JSON.parse(LS("pv_fold_closed") || "{}"); } catch(e) {}
   var served = /^https?:$/.test(location.protocol);
 
@@ -409,7 +431,7 @@ LIBRARY_JS = r"""
 
   function setHint(msg, bad){ hint.textContent = msg || ""; hint.classList.toggle("bad", !!bad); }
   function save(){
-    var body = JSON.stringify({version:1, tree:tree}, null, 2);
+    var body = JSON.stringify({version:1, favorites:favs, reading:reading, tree:tree}, null, 2);
     LS("pv_folders_local", body);
     if (!served) { setHint("只存在这个浏览器里。用 python serve.py 打开才会存进 folders.json。", true); return; }
     fetch("api/folders", {method:"POST", headers:{"Content-Type":"application/json"}, body:body})
@@ -419,7 +441,7 @@ LIBRARY_JS = r"""
 
   function row(id, name, n, depth, hasKids, node){
     var r = document.createElement("div");
-    r.className = "folder" + (id === ALL ? " all" : "") + (id === current ? " on" : "");
+    r.className = "folder" + (id === ALL ? " all" : "") + (id === FAV || id === READ ? " fav" : "") + (id === current && !query ? " on" : "");
     r.style.paddingLeft = (8 + depth * 16) + "px";
     r.setAttribute("data-id", id);
     var tw = document.createElement("span"); tw.className = "twist";
@@ -440,7 +462,7 @@ LIBRARY_JS = r"""
       r.addEventListener("dragstart", function(e){ e.dataTransfer.setData("text/plain", "folder:" + id); });
     }
     r.addEventListener("click", function(){ open(id); window.scrollTo(0, 0); });
-    r.addEventListener("dragover", function(e){ if (id !== NONE) { e.preventDefault(); r.classList.add("drop"); } });
+    r.addEventListener("dragover", function(e){ if (id !== NONE && id !== FAV && id !== READ) { e.preventDefault(); r.classList.add("drop"); } });
     r.addEventListener("dragleave", function(){ r.classList.remove("drop"); });
     r.addEventListener("drop", function(e){ e.preventDefault(); r.classList.remove("drop"); dropOn(id, e.dataTransfer.getData("text/plain")); });
     return r;
@@ -479,6 +501,8 @@ LIBRARY_JS = r"""
 
   function paintTree(){
     treeBox.innerHTML = "";
+    treeBox.appendChild(row(FAV, "★ 收藏", favs.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
+    treeBox.appendChild(row(READ, "◔ 正在读", reading.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
     treeBox.appendChild(row(ALL, "全部论文", Object.keys(cardOf).length, 0, false, null));
     (function draw(nodes, depth){
       nodes.forEach(function(n){
@@ -492,8 +516,9 @@ LIBRARY_JS = r"""
   }
 
   function open(id){
-    if (id !== ALL && id !== NONE && !find(id)) id = tree.length ? tree[0].id : ALL;
+    if (id !== ALL && id !== NONE && id !== FAV && id !== READ && !find(id)) id = tree.length ? tree[0].id : ALL;
     current = id; LS("pv_folder", id);
+    if (query && searchBox) { query = ""; searchBox.value = ""; }
     Object.keys(cardOf).forEach(function(s){ pool.appendChild(cardOf[s]); });
     cardsBox.innerHTML = "";
     function put(slugs, box){ slugs.forEach(function(s){ if (cardOf[s]) box.appendChild(cardOf[s]); }); }
@@ -505,19 +530,70 @@ LIBRARY_JS = r"""
       put(n.papers, cardsBox);
       n.children.forEach(function(c){ section(c, (path ? path + " / " : "") + c.name); });
     }
-    if (id === ALL) { titleEl.textContent = "全部论文"; tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
+    if (id === FAV) { titleEl.textContent = "★ 收藏"; put(favs, cardsBox); }
+    else if (id === READ) { titleEl.textContent = "◔ 正在读"; put(reading, cardsBox); }
+    else if (id === ALL) { titleEl.textContent = "全部论文"; tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
     else if (id === NONE) { titleEl.textContent = "未归类"; put(unassigned(), cardsBox); }
     else { var n = find(id).node; titleEl.textContent = n.name; section(n, ""); }
-    if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">这个分类还没有论文。' + (editing ? "把右边的论文拖到左边分类上即可移动。" : "") + "</p>";
+    if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">' + (id === FAV ? "还没有收藏。点论文标题右边的 ☆ 就能收藏。" : id === READ ? "还没有在读的论文。点论文标题右边的「在读」就能加进来。" : "这个分类还没有论文。" + (editing ? "把右边的论文拖到左边分类上即可移动。" : "")) + "</p>";
+    paintStars();
     paintTree();
   }
 
   function changed(){ save(); open(current); }
 
-  // 拖论文
+  // 拖论文 + 星标收藏（收藏不影响论文所在的分类）
+  function paintStars(){
+    Object.keys(cardOf).forEach(function(s){
+      var b = cardOf[s].querySelector(".star"), on = favs.indexOf(s) >= 0;
+      if (b) { b.textContent = on ? "★" : "☆"; b.classList.toggle("on", on); b.title = on ? "取消收藏" : "收藏"; }
+      var r = cardOf[s].querySelector(".readtag"), rd = reading.indexOf(s) >= 0;
+      if (r) { r.classList.toggle("on", rd); r.title = rd ? "移出「正在读」" : "标为正在读"; }
+    });
+  }
   Object.keys(cardOf).forEach(function(s){
     cardOf[s].addEventListener("dragstart", function(e){ e.dataTransfer.setData("text/plain", "paper:" + s); });
+    var b = cardOf[s].querySelector(".star");
+    if (b) b.addEventListener("click", function(e){
+      e.stopPropagation();
+      var i = favs.indexOf(s);
+      if (i >= 0) favs.splice(i, 1); else favs.unshift(s);
+      save();
+      if (query) { paintStars(); paintTree(); } else open(current);
+    });
+    var r = cardOf[s].querySelector(".readtag");
+    if (r) r.addEventListener("click", function(e){
+      e.stopPropagation();
+      var i = reading.indexOf(s);
+      if (i >= 0) reading.splice(i, 1); else reading.unshift(s);
+      save();
+      if (query) { paintStars(); paintTree(); } else open(current);
+    });
   });
+
+  // 搜索：标题、作者、出处、编号、概述；多个词要同时命中。清空后回到原来的分类。
+  var textOf = {};
+  Object.keys(cardOf).forEach(function(s){ textOf[s] = (s + " " + cardOf[s].textContent).toLowerCase(); });
+  function search(q){
+    query = q.trim();
+    if (!query) { open(current); return; }
+    var terms = query.toLowerCase().split(/\s+/);
+    var hits = Object.keys(cardOf).filter(function(s){ return terms.every(function(w){ return textOf[s].indexOf(w) >= 0; }); });
+    Object.keys(cardOf).forEach(function(s){ pool.appendChild(cardOf[s]); });
+    cardsBox.innerHTML = "";
+    hits.forEach(function(s){ cardsBox.appendChild(cardOf[s]); });
+    titleEl.textContent = "搜索「" + query + "」· " + hits.length + " 篇";
+    if (!hits.length) cardsBox.innerHTML = '<p class="fempty">没有找到。可以试试英文关键词、作者名或编号（如 L26）。</p>';
+    paintStars(); paintTree();
+  }
+  if (searchBox) {
+    searchBox.addEventListener("input", function(){ search(searchBox.value); });
+    searchBox.addEventListener("keydown", function(e){ if (e.key === "Escape") { searchBox.value = ""; search(""); searchBox.blur(); } });
+    document.addEventListener("keydown", function(e){
+      var tag = (document.activeElement || {}).tagName || "";
+      if (e.key === "/" && !/INPUT|TEXTAREA/.test(tag)) { e.preventDefault(); searchBox.focus(); }
+    });
+  }
   document.getElementById("fEdit").addEventListener("click", function(e){
     editing = !editing; e.target.textContent = editing ? "完成" : "编辑";
     if (editing) setHint("拖论文到分类上 = 移动；拖分类到分类上 = 变成子分类，拖到「全部论文」= 回顶层。");
@@ -530,11 +606,18 @@ LIBRARY_JS = r"""
   });
 
   // 启动：优先读 folders.json（用 serve.py 打开时），其次是本浏览器里没存进文件的编辑，最后用生成时内嵌的树
-  function start(t){ if (Array.isArray(t)) tree = t; walk(tree, function(){}); open(current); }
+  function start(d){
+    if (d && Array.isArray(d.tree)) {
+      tree = d.tree;
+      favs = Array.isArray(d.favorites) ? d.favorites : [];
+      reading = Array.isArray(d.reading) ? d.reading : [];
+    }
+    walk(tree, function(){}); open(current);
+  }
   var local = null; try { local = JSON.parse(LS("pv_folders_local") || "null"); } catch(e) {}
-  if (local && local.tree) { start(local.tree); if (served) save(); }
+  if (local && local.tree) { start(local); if (served) save(); }
   else if (served) fetch("folders.json", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){ start(d && d.tree); }).catch(function(){ start(); });
+    .then(function(d){ start(d); }).catch(function(){ start(); });
   else start();
 })();
 """
@@ -1005,7 +1088,16 @@ def load_tree(vault, papers):
     return default_tree(papers)
 
 
-def render_l1(papers, css_href, library_href, tree=None):
+def load_favorites(vault, key="favorites"):
+    """folders.json 里的收藏（favorites）或正在读（reading）列表，都是 slug。"""
+    try:
+        fav = json.loads((Path(vault) / FOLDERS_FILE).read_text(encoding="utf-8")).get(key, [])
+        return [s for s in fav if isinstance(s, str)]
+    except Exception:
+        return []
+
+
+def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading=None):
     # papers: list of dict {slug, meta}；tree: 分类树（见 load_tree），树和交互都由 library.js 渲染
     if tree is None:
         tree = default_tree(papers)
@@ -1022,13 +1114,15 @@ def render_l1(papers, css_href, library_href, tree=None):
       <a class="ptitle" href="%(href)s">%(title)s</a>
       <div class="pmeta">%(pmeta)s</div>
     </div>
+    <button class="readtag" title="标为正在读">在读</button>
+    <button class="star" title="收藏">☆</button>
   </div>
   <div class="poverview">%(overview)s</div>
 </div>""") % {
             "slug": esc(p["slug"]), "href": esc(href), "title": esc(m.get("title")),
             "pmeta": pmeta, "overview": esc(m.get("overview")),
         }
-    tree_json = json.dumps({"tree": tree}, ensure_ascii=False).replace("</", "<\\/")
+    tree_json = json.dumps({"tree": tree, "favorites": favorites or [], "reading": reading or []}, ensure_ascii=False).replace("</", "<\\/")
     chips = ('<div class="fbar"><span class="ftitle">分类</span>'
              '<button class="fbtn" id="fAdd" title="新建分类">＋</button>'
              '<button class="fbtn" id="fEdit" title="编辑分类树">编辑</button></div>'
@@ -1050,6 +1144,7 @@ def render_l1(papers, css_href, library_href, tree=None):
   <h1 class="libtitle">论文阅读库</h1>
   <span class="libcount">%(count)d 篇 · 三遍法 · 中英对照</span>
   <span class="spacer"></span>
+  <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" autocomplete="off">
   <button class="iconbtn" id="themeBtn" title="主题">◐</button>
 </header>
 <div class="libwrap">
@@ -1229,7 +1324,8 @@ def build(vault: Path):
         if bad:
             pairing_bad[slug] = bad
 
-    l1 = render_l1(papers, "assets/app.css", "assets/library.js", load_tree(vault, papers))
+    l1 = render_l1(papers, "assets/app.css", "assets/library.js", load_tree(vault, papers),
+                   load_favorites(vault), load_favorites(vault, "reading"))
     (vault / "index.html").write_text(l1, encoding="utf-8")
     # 本地服务：打开首页并把分类树的编辑保存回 folders.json
     serve_src = Path(__file__).with_name("serve.py")
