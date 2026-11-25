@@ -167,6 +167,8 @@ body.fview-venue .fbar .fbtn, body.fview-author .fbar .fbtn{display:none;}
   color:var(--ink); text-decoration:none; background:var(--paper);}
 .vcard .vlinks a:hover{border-color:var(--accent);}
 .uibtn{font-size:12px; font-weight:600; letter-spacing:.02em; min-width:34px;}
+.libmotto{font-family:var(--font-zh); color:var(--accent); font-size:14px; letter-spacing:.04em;}
+@media(max-width:760px){ .libmotto{display:none;} }
 @media(max-width:760px){
   .libwrap{flex-direction:column; padding:0 16px; gap:0;}
   .folders{position:static; flex:none; width:100%; max-height:none; display:flex; flex-wrap:wrap; gap:4px;}
@@ -1588,6 +1590,7 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <body class="l1">
 <header class="libhead">
   <h1 class="libtitle" title="Lyceum Hall" data-en="Lyceum Hall" data-en-title="潜研堂">潜研堂</h1>
+  <span class="libmotto" data-en="The sun's rays do not burn until brought to a focus.">心无旁骛，专心致志；沉潜往复，钩深致远</span>
   <span class="libcount" data-en="%(count)d papers · bilingual">%(count)d 篇 · 中英对照</span>
   <span class="spacer"></span>
   <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" data-en-ph="Search papers, authors, IDs (press /)" autocomplete="off">
