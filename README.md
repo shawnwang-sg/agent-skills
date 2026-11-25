@@ -42,6 +42,7 @@ agent-skills/
 | [video-to-aboboo](./video-to-aboboo) | 端到端：YouTube/本地视频 → 下载 → 转 MP3 → 约 6 分钟切分（lesson-splitter）→ 剪映重识别中英字幕 → 整句双语 SRT → Aboboo 课件制作并上传小组；三条线流水并行，`status.py` 看每段进度。 |
 | [jianying-subtitles](./jianying-subtitles) | 用剪映专业版（computer-use）批量识别英文字幕 + 中文翻译，复用同一草稿逐个替换素材、只导出 SRT；子代理合并整句并翻译，`jy_merge.py` 生成 GBK 双语 SRT（Aboboo 可用）+ 纯英文 SRT。 |
 | [aboboo-courseware](./aboboo-courseware) | Aboboo 课件编辑器（computer-use）批量制作 `.q99`：`make_mapping.py` 生成「NNN 标题-partXX」编号表，导入双语字幕、默认模板渲染、填作者/分类/编号、上传到小组；含更新已上传课件（版本号 + 重渲染）和常见报错处理。 |
+| [english-intensive-reading](./english-intensive-reading) | 英文材料照片（广告、传单、说明书、信件……）→ 按原始文件分组，完整转写英文，逐句中文翻译 + 语法讲解 + 重点词美式 IPA；A4 黑白双栏紧凑排版，每份材料从奇数页开始，合并成适合双面打印的 PDF，另出转写 TXT 和学习笔记 TXT。 |
 | [working-preferences](./working-preferences) | 做事偏好总表（从历史对话归纳）：沟通和进度汇报、先小样再批量、文字整理尺度（保留原话、改动 ≤15%）、版面取舍（省空间、一套风格、短标题）、下载和账号安全（不并发、不付费）、文件和产物、skill 与 GitHub 的习惯。跨任务通用，开工前先读。 |
 
 ## Glossaries
