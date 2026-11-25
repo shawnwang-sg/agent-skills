@@ -16,6 +16,7 @@
 import argparse
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -138,6 +139,33 @@ body.lang-zh .zh{color:var(--ink);}           /* zh-only 时把 zh 提为主色 
 .subhead{font-family:var(--font-zh); font-weight:600; color:var(--soft); font-size:calc(15px*var(--read)); margin:22px 0 6px;}
 .fempty{color:var(--soft);}
 body.fediting .pcard{cursor:grab;}
+/* 左栏视图切换：内容 / 会议 / 作者 */
+.fview{display:flex; gap:4px; margin:8px 4px 6px; padding:3px; background:var(--paper); border-radius:9px;}
+.fview button{flex:1; border:0; background:transparent; color:var(--soft); border-radius:7px; padding:4px 0;
+  font-size:13px; font-family:var(--font-zh); cursor:pointer;}
+.fview button.on{background:var(--card); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08);}
+.fgroup{color:var(--soft); font-size:11px; letter-spacing:.06em; padding:10px 10px 2px;}
+body.fview-venue .fbar .fbtn, body.fview-author .fbar .fbtn{display:none;}
+.flinks{margin:14px 4px 4px; padding-top:10px; border-top:1px solid var(--line); font-size:12px; line-height:1.7;}
+.flinks b{display:block; color:var(--soft); font-weight:600; margin-bottom:2px;}
+.flinks a{display:block; color:var(--accent2); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.flinks a:hover{text-decoration:underline;}
+/* 会议 / 作者介绍卡 */
+.vcard{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:0 0 14px;
+  font-family:var(--font-zh); font-size:calc(14px*var(--read)); line-height:1.75;}
+.vcard .vfull{color:var(--soft); margin-bottom:8px;}
+.vcard .vscore{float:right; margin:-4px 0 6px 16px; text-align:right;}
+.vcard .vscore b{font-size:34px; color:var(--accent); font-family:var(--font-display);}
+.vcard .vscore small{color:var(--soft); font-size:12px;}
+.vcard .vtags span{display:inline-block; border:1px solid var(--line); border-radius:999px; padding:0 9px; margin:0 6px 6px 0; font-size:12px; color:var(--soft);}
+.vcard .vtags span.ccf{border-color:var(--accent); color:var(--accent); font-weight:600;}
+.vcard h4{margin:12px 0 4px; font-size:13px; color:var(--accent2);}
+.vcard p{margin:0;}
+.vcard table{border-collapse:collapse; margin-top:2px;}
+.vcard td{padding:2px 16px 2px 0; vertical-align:top;}
+.vcard .vlinks a{display:inline-block; margin:4px 8px 0 0; padding:3px 12px; border:1px solid var(--line); border-radius:8px;
+  color:var(--ink); text-decoration:none; background:var(--paper);}
+.vcard .vlinks a:hover{border-color:var(--accent);}
 @media(max-width:760px){
   .libwrap{flex-direction:column; padding:0 16px; gap:0;}
   .folders{position:static; flex:none; width:100%; max-height:none; display:flex; flex-wrap:wrap; gap:4px;}
@@ -370,6 +398,34 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
   .topbar .tb-title{max-width:40vw;}
   .topbar .tb-meta{display:none;}
 }
+
+/* ── 我的概括（理解每一节末尾 / 鸟瞰的一句话结论）── */
+.mysum{margin:28px 0 8px; padding:14px 16px; border:1px dashed var(--accent2); border-radius:12px; background:var(--card);
+  font-family:var(--font-zh); font-size:calc(14px*var(--read)); line-height:1.7;}
+.mysum .ms-head{font-weight:700; color:var(--accent2);}
+.mysum .ms-sub{font-weight:400; color:var(--soft); font-size:12px; margin-left:8px;}
+.mysum textarea{width:100%; box-sizing:border-box; margin:8px 0; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+  background:var(--page); color:var(--ink); font:inherit; resize:vertical; min-height:84px;}
+.mysum textarea:focus{outline:none; border-color:var(--accent2);}
+.mysum .ms-bar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.mysum button{border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:8px; padding:5px 14px; cursor:pointer; font:inherit; font-size:13px;}
+.mysum button.primary{background:var(--accent2); border-color:var(--accent2); color:#fff; font-weight:600;}
+.mysum button:disabled{opacity:.55; cursor:wait;}
+.mysum .ms-st{color:var(--soft); font-size:12px;}
+.mysum .ms-res{margin-top:10px;}
+.mysum .ms-score{font-size:28px; font-weight:700; color:var(--accent); margin-right:8px;}
+.mysum .ms-score small{font-size:14px; color:var(--soft); font-weight:400;}
+.mysum .ms-res h5{margin:10px 0 2px; font-size:13px; color:var(--accent2);}
+.mysum .ms-res ul{margin:2px 0; padding-left:20px;}
+.mysum .ms-res q{display:block; color:var(--soft); font-style:italic; font-family:var(--font-en, serif); quotes:none;}
+.mysum details summary{cursor:pointer; color:var(--accent2); margin-top:8px;}
+.page.veiled .col > :not(.pagetitle):not(.mysum){filter:blur(7px); user-select:none; pointer-events:none;}
+/* ── 划词收藏 → 英语教练 ── */
+.pick{position:fixed; z-index:50; display:flex; gap:4px; padding:4px; border-radius:9px; background:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.25);}
+.pick button{border:0; background:transparent; color:var(--page); font:13px var(--font-zh); padding:4px 10px; border-radius:6px; cursor:pointer;}
+.pick button:hover{background:rgba(255,255,255,.15);}
+.toast{position:fixed; z-index:60; left:50%; bottom:70px; transform:translateX(-50%); max-width:min(560px,90vw);
+  background:var(--ink); color:var(--page); padding:8px 16px; border-radius:10px; font:13px/1.6 var(--font-zh); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -416,6 +472,19 @@ LIBRARY_JS = r"""
   var embedded = JSON.parse(document.getElementById("pv-folders").textContent);
   var tree = embedded.tree, favs = embedded.favorites || [], reading = embedded.reading || [], editing = false, current = LS("pv_folder") || "";
   var query = "", searchBox = document.getElementById("q");
+  // 会议 / 作者视图（venues.json 存在时才有）
+  var VEN = embedded.venues, facets = embedded.facets || {}, venOf = {};
+  if (VEN) VEN.venues.forEach(function(v){ venOf[v.key] = v; });
+  var view = VEN ? (LS("pv_view") || "content") : "content";
+  var lastOf = {}; try { lastOf = JSON.parse(LS("pv_view_last") || "{}"); } catch(e) {}
+  function E(tag, cls, text){ var x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
+  function papersOfVenue(k){ return Object.keys(cardOf).filter(function(s){ return (facets[s] || {}).v === k; }); }
+  function papersOfAuthor(a){ return Object.keys(cardOf).filter(function(s){ return ((facets[s] || {}).a || []).indexOf(a) >= 0; }); }
+  function authorCounts(){
+    var c = {}; Object.keys(cardOf).forEach(function(s){ ((facets[s] || {}).a || []).forEach(function(a){ c[a] = (c[a] || 0) + 1; }); });
+    return c;
+  }
+  function byYear(slugs){ return slugs.slice().sort(function(a, b){ return ((facets[b] || {}).y || 0) - ((facets[a] || {}).y || 0); }); }
   var closed = {}; try { closed = JSON.parse(LS("pv_fold_closed") || "{}"); } catch(e) {}
   var served = /^https?:$/.test(location.protocol);
 
@@ -441,7 +510,7 @@ LIBRARY_JS = r"""
 
   function row(id, name, n, depth, hasKids, node){
     var r = document.createElement("div");
-    r.className = "folder" + (id === ALL ? " all" : "") + (id === FAV || id === READ ? " fav" : "") + (id === current && !query ? " on" : "");
+    r.className = "folder" + (id === ALL && view === "content" ? " all" : "") + (id === FAV || id === READ ? " fav" : "") + (id === current && !query ? " on" : "");
     r.style.paddingLeft = (8 + depth * 16) + "px";
     r.setAttribute("data-id", id);
     var tw = document.createElement("span"); tw.className = "twist";
@@ -503,20 +572,129 @@ LIBRARY_JS = r"""
     treeBox.innerHTML = "";
     treeBox.appendChild(row(FAV, "★ 收藏", favs.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
     treeBox.appendChild(row(READ, "◔ 正在读", reading.filter(function(s){ return cardOf[s]; }).length, 0, false, null));
-    treeBox.appendChild(row(ALL, "全部论文", Object.keys(cardOf).length, 0, false, null));
-    (function draw(nodes, depth){
-      nodes.forEach(function(n){
-        treeBox.appendChild(row(n.id, n.name, count(n), depth, n.children.length > 0, n));
-        if (!closed[n.id]) draw(n.children, depth + 1);
+    if (VEN) {
+      var seg = E("div", "fview");
+      [["content", "内容"], ["venue", "会议"], ["author", "作者"]].forEach(function(o){
+        var b = E("button", view === o[0] ? "on" : "", o[1]);
+        b.addEventListener("click", function(){ setView(o[0]); });
+        seg.appendChild(b);
       });
-    })(tree, 0);
-    var loose = unassigned();
-    if (loose.length) treeBox.appendChild(row(NONE, "未归类", loose.length, 0, false, null));
+      treeBox.appendChild(seg);
+    }
+    if (view === "venue") {
+      VEN.groups.forEach(function(g){
+        var vs = VEN.venues.filter(function(v){ return v.group === g && papersOfVenue(v.key).length; })
+          .sort(function(a, b){ return (b.score || 0) - (a.score || 0); });
+        if (!vs.length) return;
+        treeBox.appendChild(E("div", "fgroup", g));
+        vs.forEach(function(v){ treeBox.appendChild(row("v:" + v.key, v.name + (v.score ? "  ·  " + v.score + " 分" : ""), papersOfVenue(v.key).length, 0, false, null)); });
+      });
+    } else if (view === "author") {
+      var ac = authorCounts(), names = Object.keys(ac).filter(function(a){ return ac[a] >= 2; });
+      names.sort(function(a, b){ return ac[b] - ac[a] || a.localeCompare(b); });
+      treeBox.appendChild(E("div", "fgroup", "库里有 2 篇以上的作者"));
+      names.forEach(function(a){ treeBox.appendChild(row("a:" + a, a, ac[a], 0, false, null)); });
+      treeBox.appendChild(E("div", "fhint", "其余 " + (Object.keys(ac).length - names.length) + " 位作者只有 1 篇，可用右上角搜索。"));
+    } else {
+      treeBox.appendChild(row(ALL, "全部论文", Object.keys(cardOf).length, 0, false, null));
+      (function draw(nodes, depth){
+        nodes.forEach(function(n){
+          treeBox.appendChild(row(n.id, n.name, count(n), depth, n.children.length > 0, n));
+          if (!closed[n.id]) draw(n.children, depth + 1);
+        });
+      })(tree, 0);
+      var loose = unassigned();
+      if (loose.length) treeBox.appendChild(row(NONE, "未归类", loose.length, 0, false, null));
+    }
+    if (VEN && VEN.friend_links && VEN.friend_links.length) {
+      var fl = E("div", "flinks"); fl.appendChild(E("b", "", "友情链接 · 找新论文"));
+      VEN.friend_links.forEach(function(l){ var a = E("a", "", l.name); a.href = l.url; a.target = "_blank"; a.rel = "noopener"; a.title = l.note || ""; fl.appendChild(a); });
+      treeBox.appendChild(fl);
+    }
     document.body.classList.toggle("fediting", editing);
+    document.body.classList.remove("fview-content", "fview-venue", "fview-author");
+    document.body.classList.add("fview-" + view);
+  }
+
+  function setView(v){
+    if (v === view) return;
+    lastOf[view] = current; view = v; LS("pv_view", v); LS("pv_view_last", JSON.stringify(lastOf));
+    var go = lastOf[v];
+    if (!go || go === FAV || go === READ) {
+      if (v === "venue") go = "v:" + ((VEN.venues.filter(function(x){ return papersOfVenue(x.key).length; })[0] || {}).key);
+      else if (v === "author") { var ac = authorCounts(); go = "a:" + Object.keys(ac).sort(function(a, b){ return ac[b] - ac[a]; })[0]; }
+      else go = ALL;
+    }
+    open(go);
+  }
+
+  function venueCard(v, n){
+    var c = E("div", "vcard");
+    if (v.score) {
+      var sc = E("div", "vscore"); sc.appendChild(E("b", "", String(v.score))); sc.appendChild(E("small", "", " / 10 综合评分"));
+      if (VEN.score_note) sc.title = VEN.score_note;
+      c.appendChild(sc);
+    }
+    c.appendChild(E("div", "vfull", v.full));
+    var tags = E("div", "vtags");
+    [v.kind, v.group].concat(v.ccf ? ["CCF " + v.ccf] : []).concat(v.time ? [v.time] : []).forEach(function(t){
+      tags.appendChild(E("span", t.indexOf("CCF") === 0 ? "ccf" : "", t));
+    });
+    tags.appendChild(E("span", "", "库里 " + n + " 篇"));
+    c.appendChild(tags);
+    c.appendChild(E("h4", "", "介绍")); c.appendChild(E("p", "", v.intro));
+    if (v.influence) { c.appendChild(E("h4", "", "分量与影响力")); c.appendChild(E("p", "", v.influence)); }
+    if (v.editions && v.editions.length) {
+      c.appendChild(E("h4", "", "时间地点"));
+      var t = E("table");
+      v.editions.forEach(function(ed){ var tr = E("tr"); tr.appendChild(E("td", "", String(ed.year))); tr.appendChild(E("td", "", ed.place)); tr.appendChild(E("td", "", ed.dates || "")); t.appendChild(tr); });
+      c.appendChild(t);
+    }
+    var links = Object.keys(v.links || {});
+    if (links.length) {
+      var lk = E("div", "vlinks");
+      links.forEach(function(k){ var a = E("a", "", k + " ↗"); a.href = v.links[k]; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); });
+      c.appendChild(lk);
+    }
+    if (VEN.checked && v.editions && v.editions.length) c.appendChild(E("div", "fhint", "时间地点核对于 " + VEN.checked + "，以官网为准。"));
+    if (v.score && VEN.score_note) c.appendChild(E("div", "fhint", VEN.score_note));
+    return c;
+  }
+
+  function authorCard(a, slugs){
+    var c = E("div", "vcard"), co = {};
+    slugs.forEach(function(s){ (facets[s].a || []).forEach(function(x){ if (x !== a) co[x] = (co[x] || 0) + 1; }); });
+    var vs = {}; slugs.forEach(function(s){ var k = facets[s].v; if (k) vs[k] = (vs[k] || 0) + 1; });
+    var tags = E("div", "vtags"); tags.appendChild(E("span", "", "库里 " + slugs.length + " 篇"));
+    Object.keys(vs).forEach(function(k){ tags.appendChild(E("span", "", (venOf[k] || {}).name + " × " + vs[k])); });
+    c.appendChild(tags);
+    var top = Object.keys(co).sort(function(x, y){ return co[y] - co[x]; }).slice(0, 12);
+    if (top.length) { c.appendChild(E("h4", "", "库里的合作者")); c.appendChild(E("p", "", top.join("、"))); }
+    var lk = E("div", "vlinks"), q = encodeURIComponent(a);
+    [["DBLP", "https://dblp.org/search?q=" + q], ["Google Scholar", "https://scholar.google.com/scholar?q=author%3A%22" + q + "%22"], ["Semantic Scholar", "https://www.semanticscholar.org/search?q=" + q]].forEach(function(x){
+      var l = E("a", "", x[0] + " ↗"); l.href = x[1]; l.target = "_blank"; l.rel = "noopener"; lk.appendChild(l);
+    });
+    c.appendChild(lk);
+    return c;
+  }
+
+  function putByYear(slugs){
+    var last = null;
+    byYear(slugs).forEach(function(s){
+      var y = (facets[s] || {}).y || "年份不详";
+      if (y !== last) { cardsBox.appendChild(E("h3", "subhead", String(y))); last = y; }
+      cardsBox.appendChild(cardOf[s]);
+    });
   }
 
   function open(id){
-    if (id !== ALL && id !== NONE && id !== FAV && id !== READ && !find(id)) id = tree.length ? tree[0].id : ALL;
+    id = id || ALL;
+    if (/^v:/.test(id) && !(VEN && venOf[id.slice(2)])) id = ALL;
+    if (/^a:/.test(id) && !(VEN && papersOfAuthor(id.slice(2)).length)) id = ALL;
+    if (/^v:/.test(id)) view = "venue"; else if (/^a:/.test(id)) view = "author";
+    else if (id !== FAV && id !== READ) view = "content";
+    if (VEN) LS("pv_view", view);
+    if (!/^[va]:/.test(id) && id !== ALL && id !== NONE && id !== FAV && id !== READ && !find(id)) id = tree.length ? tree[0].id : ALL;
     current = id; LS("pv_folder", id);
     if (query && searchBox) { query = ""; searchBox.value = ""; }
     Object.keys(cardOf).forEach(function(s){ pool.appendChild(cardOf[s]); });
@@ -534,6 +712,8 @@ LIBRARY_JS = r"""
     else if (id === READ) { titleEl.textContent = "◔ 正在读"; put(reading, cardsBox); }
     else if (id === ALL) { titleEl.textContent = "全部论文"; tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
     else if (id === NONE) { titleEl.textContent = "未归类"; put(unassigned(), cardsBox); }
+    else if (/^v:/.test(id)) { var v = venOf[id.slice(2)], vs = papersOfVenue(v.key); titleEl.textContent = v.name; cardsBox.appendChild(venueCard(v, vs.length)); putByYear(vs); }
+    else if (/^a:/.test(id)) { var an = id.slice(2), as = papersOfAuthor(an); titleEl.textContent = an; cardsBox.appendChild(authorCard(an, as)); putByYear(as); }
     else { var n = find(id).node; titleEl.textContent = n.name; section(n, ""); }
     if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">' + (id === FAV ? "还没有收藏。点论文标题右边的 ☆ 就能收藏。" : id === READ ? "还没有在读的论文。点论文标题右边的「在读」就能加进来。" : "这个分类还没有论文。" + (editing ? "把右边的论文拖到左边分类上即可移动。" : "")) + "</p>";
     paintStars();
@@ -791,6 +971,7 @@ READER_JS = r"""
 
   // ── 键盘 ──
   document.addEventListener("keydown", function(e){
+    if (/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || "")) return;   // 在概括框里打字不翻页
     if (e.key==="ArrowLeft"||e.key==="PageUp"){ showPage(curMode().idx-1); }
     else if (e.key==="ArrowRight"||e.key==="PageDown"){ showPage(curMode().idx+1); }
     else if (e.key==="Home"){ showPage(0); }
@@ -821,6 +1002,131 @@ READER_JS = r"""
     s.async=true; document.head.appendChild(s);
   }
 
+
+  // ── 我的概括：理解模式每一节末尾一个框，鸟瞰「一句话结论」页先写再看 ──
+  // 保存进 vault/notes.json；「提交并评分」由 serve.py 调本机 claude 打 1–10 分并点评。
+  var served = /^https?:$/.test(location.protocol);
+  var slugM = location.pathname.match(/papers\/([^\/]+)\//), SLUG = slugM ? decodeURIComponent(slugM[1]) : "";
+  var NOTES = {};
+  function E(tag, cls, text){ var x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
+  function sections(mk){
+    // 一节分成多页时，目录标题带「(i/n)」；i > 1 的页接在上一节后面。顺序和 paper.json 的 sections 一致
+    var out = [], last = null;
+    (modes[mk] ? modes[mk].pages : []).forEach(function(pg){
+      var raw = pg.getAttribute("data-toc-en") || "", m = raw.match(/\s*\((\d+)\/\d+\)$/);
+      if (last && m && +m[1] > 1) { last.pages.push(pg); return; }
+      last = {title: raw.replace(/\s*\(\d+\/\d+\)$/, ""), pages:[pg], idx:out.length}; out.push(last);
+    });
+    return out;
+  }
+  function renderResult(box, entry){
+    var res = box.querySelector(".ms-res"); res.innerHTML = "";
+    var r = entry && entry.result; if (!r) return;
+    var head = E("div"); var sc = E("span", "ms-score", String(r.score)); sc.appendChild(E("small", "", " / 10"));
+    head.appendChild(sc); head.appendChild(document.createTextNode(r.verdict || "")); res.appendChild(head);
+    function list(title, items, fn){
+      if (!items || !items.length) return;
+      res.appendChild(E("h5", "", title)); var ul = E("ul");
+      items.forEach(function(it){ var li = E("li"); fn(li, it); ul.appendChild(li); }); res.appendChild(ul);
+    }
+    list("✓ 说对了", r.right, function(li, it){ li.textContent = it; });
+    list("△ 漏掉的关键点", r.missed, function(li, it){ li.appendChild(document.createTextNode(it.point || it)); if (it.quote) li.appendChild(E("q", "", it.quote)); });
+    list("✗ 不对的地方", r.wrong, function(li, it){ li.appendChild(document.createTextNode("「" + (it.claim || "") + "」 " + (it.why || ""))); });
+    list("英文表达", r.english, function(li, it){ li.appendChild(document.createTextNode(it.original + " → " + it.better + (it.why ? "（" + it.why + "）" : ""))); });
+    if (r.reference) { var d = E("details"); d.appendChild(E("summary", "", "看参考概括")); d.appendChild(E("p", "", r.reference)); res.appendChild(d); }
+  }
+  function sumBox(mk, sec, opts){
+    var key = mk + ":" + sec.idx, hist = ((NOTES[SLUG] || {})[key]) || [], last = hist[hist.length - 1];
+    var box = E("div", "mysum");
+    var h = E("div", "ms-head", opts.head); h.appendChild(E("span", "ms-sub", opts.sub)); box.appendChild(h);
+    var ta = E("textarea"); ta.placeholder = opts.ph; if (last) ta.value = last.text; box.appendChild(ta);
+    var bar = E("div", "ms-bar"), bj = E("button", "primary", "提交并评分"), bs = E("button", "", "只保存"), st = E("span", "ms-st");
+    bar.appendChild(bj); bar.appendChild(bs);
+    if (opts.skip) { var bk = E("button", "", "跳过，直接看"); bk.addEventListener("click", function(){ opts.skip(); }); bar.appendChild(bk); }
+    bar.appendChild(st); box.appendChild(bar); box.appendChild(E("div", "ms-res"));
+    if (hist.length) st.textContent = "已写过 " + hist.length + " 次，最近 " + last.at;
+    if (!served) { st.textContent = "用 python serve.py 打开才能保存和评分"; bj.disabled = bs.disabled = true; }
+    renderResult(box, last);
+    function send(api){
+      var text = ta.value.trim(); if (!text) { st.textContent = "先写几句再提交"; return; }
+      bj.disabled = bs.disabled = true; st.textContent = api === "judge" ? "评分中，约 20–60 秒…" : "保存中…";
+      fetch("../../api/" + api, {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({slug:SLUG, mode:mk, sec:sec.idx, title:sec.title, text:text})})
+        .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
+        .then(function(d){
+          (NOTES[SLUG] = NOTES[SLUG] || {})[key] = hist.concat([d.entry]); hist = NOTES[SLUG][key];
+          st.textContent = (api === "judge" ? "已评分" : "已保存") + " · " + d.entry.at;
+          if (d.entry.result) renderResult(box, d.entry);
+          if (opts.done) opts.done();
+        })
+        .catch(function(e){ st.textContent = "失败：" + e.message; })
+        .then(function(){ bj.disabled = bs.disabled = false; });
+    }
+    bj.addEventListener("click", function(){ send("judge"); });
+    bs.addEventListener("click", function(){ send("notes"); });
+    return box;
+  }
+  function addSummaryBoxes(){
+    if (!SLUG) return;
+    sections("grasp").forEach(function(sec){
+      var col = sec.pages[sec.pages.length - 1].querySelector(".col"); if (!col) return;
+      col.appendChild(sumBox("grasp", sec, {head:"✍ 我的概括", sub:"用自己的话写：这一节在说什么、靠什么证据。中英文都行。", ph:"这一节说的是……"}));
+    });
+    sections("skim").forEach(function(sec){
+      var pg = sec.pages[0]; if (!pg.classList.contains("page--conclusion")) return;
+      var hist = ((NOTES[SLUG] || {})["skim:" + sec.idx]) || [];
+      if (!hist.length) pg.classList.add("veiled");
+      var open = function(){ pg.classList.remove("veiled"); };
+      var t = pg.querySelector(".pagetitle"), box = sumBox("skim", sec, {head:"✍ 先写我的一句话", sub:"只看了标题、摘要和章节名，你觉得这篇论文解决了什么、靠什么、结果如何？写完再看下面的结论。", ph:"这篇论文……", skip:open, done:open});
+      if (t) t.after(box); else pg.querySelector(".col").prepend(box);
+    });
+  }
+
+  // ── 划词收藏 → 英语教练（serve.py 转发到 lang-coach 的 /api/collect）──
+  var pick = null;
+  function hidePick(){ if (pick) { pick.remove(); pick = null; } }
+  function toast(msg){
+    var t = E("div", "toast", msg); document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 3500);
+  }
+  function sentenceOf(full, frag){
+    var parts = full.match(/[^.!?。！？]+[.!?。！？]*["')\]]*\s*/g) || [full];
+    for (var i = 0; i < parts.length; i++) if (parts[i].indexOf(frag) >= 0) return parts[i].trim();
+    return full.trim().slice(0, 600);
+  }
+  function collect(kind, text, sentence){
+    hidePick();
+    var page = document.querySelector(".mode.active .page.active"), sec = page ? (page.getAttribute("data-toc-en") || "") : "";
+    fetch("../../api/coach/collect", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({kind:kind, text:text, sentence:sentence,
+        source:{app:"paper-vault", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
+      .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
+      .then(function(d){
+        if (kind === "word") { var w = d.word || {}; toast("已收进英语教练 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
+        else toast("已收进英语教练的难句本，打开英语教练可看主干拆解。");
+      })
+      .catch(function(e){ toast("没收成：" + e.message); });
+  }
+  if (served) document.addEventListener("mouseup", function(e){
+    if (e.target.closest && (e.target.closest(".pick") || e.target.closest(".mysum"))) return;
+    setTimeout(function(){
+      hidePick();
+      var sel = window.getSelection(), text = sel ? sel.toString().replace(/\s+/g, " ").trim() : "";
+      if (!text || text.length > 500 || !/[A-Za-z]/.test(text)) return;
+      var node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode);
+      var host = node && node.closest && node.closest(".page .en"); if (!host || node.closest(".mysum")) return;
+      var rect = sel.getRangeAt(0).getBoundingClientRect(), words = text.split(" ").length;
+      pick = E("div", "pick");
+      var sentence = sentenceOf(host.textContent, text);
+      if (words <= 4) { var bw = E("button", "", "＋ 收藏词"); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
+      var bsn = E("button", "", "＋ 收藏句"); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
+      document.body.appendChild(pick);
+      pick.style.left = Math.max(8, Math.min(window.innerWidth - pick.offsetWidth - 8, rect.left + rect.width / 2 - pick.offsetWidth / 2)) + "px";
+      pick.style.top = Math.max(8, rect.top - pick.offsetHeight - 8) + "px";
+    }, 0);
+  });
+  document.addEventListener("scroll", hidePick, true);
+
   // ── 初始化 ──
   var st=localStorage.getItem("pv_theme"); if (st && THEMES.indexOf(st)>=0) applyTheme(st);
   setLang(localStorage.getItem("pv_lang") || "both");
@@ -831,6 +1137,10 @@ READER_JS = r"""
   setToc(tocPref === "1");
   setCards(localStorage.getItem("pv_cards") === "1");
   showMode(curKey);
+  // 概括框：先读 notes.json（用 serve.py 打开时），再插框
+  if (served) fetch("../../api/notes", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ NOTES = (d && d.summaries) || {}; addSummaryBoxes(); }).catch(function(){ addSummaryBoxes(); });
+  else addSummaryBoxes();
 })();
 """
 
@@ -1097,8 +1407,46 @@ def load_favorites(vault, key="favorites"):
         return []
 
 
-def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading=None):
+VENUES_FILE = "venues.json"
+
+
+def load_venues(vault):
+    """vault/venues.json：会议 / 期刊资料（介绍、分级、时间地点、链接）和友情链接。没有就返回 None。"""
+    f = Path(vault) / VENUES_FILE
+    try:
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+    except Exception as e:
+        print("  ! %s 解析失败，首页不显示会议：%s" % (f, e), file=sys.stderr)
+        return None
+
+
+def paper_facets(papers, venues):
+    """每篇论文的会议（按 venues.json 里的 match 正则，先匹配先得）、年份、作者列表。"""
+    out = {}
+    rules = [(v["key"], re.compile(v["match"], re.I)) for v in (venues or {}).get("venues", []) if v.get("match")]
+    for p in papers:
+        m = p["meta"]
+        src = m.get("source") or ""
+        key = next((k for k, rx in rules if rx.search(src)), "")
+        yr = re.search(r"\b(19|20)\d{2}\b", src)
+        authors = [re.sub(r"\s*\(.*?\)\s*", "", a).strip() for a in re.split(r";|；", m.get("authors") or "")]
+        out[p["slug"]] = {"v": key, "y": int(yr.group(0)) if yr else 0, "a": [a for a in authors if a]}
+    # 同一人的不同写法（Reynold Xin / Reynold S. Xin）合并：去掉中间名缩写后相同就算一人，显示最长的写法
+    canon = lambda a: " ".join(t for t in a.split() if not re.fullmatch(r"[A-Z]\.", t)).lower()
+    best = {}
+    for f in out.values():
+        for a in f["a"]:
+            k = canon(a)
+            if len(a) > len(best.get(k, "")):
+                best[k] = a
+    for f in out.values():
+        f["a"] = list(dict.fromkeys(best[canon(a)] for a in f["a"]))
+    return out
+
+
+def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading=None, venues=None):
     # papers: list of dict {slug, meta}；tree: 分类树（见 load_tree），树和交互都由 library.js 渲染
+    # venues: load_venues() 的结果；有它时左栏多出「会议」「作者」两种视图和友情链接
     if tree is None:
         tree = default_tree(papers)
 
@@ -1122,7 +1470,9 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
             "slug": esc(p["slug"]), "href": esc(href), "title": esc(m.get("title")),
             "pmeta": pmeta, "overview": esc(m.get("overview")),
         }
-    tree_json = json.dumps({"tree": tree, "favorites": favorites or [], "reading": reading or []}, ensure_ascii=False).replace("</", "<\\/")
+    tree_json = json.dumps({"tree": tree, "favorites": favorites or [], "reading": reading or [],
+                            "venues": venues, "facets": paper_facets(papers, venues) if venues else {}},
+                           ensure_ascii=False).replace("</", "<\\/")
     chips = ('<div class="fbar"><span class="ftitle">分类</span>'
              '<button class="fbtn" id="fAdd" title="新建分类">＋</button>'
              '<button class="fbtn" id="fEdit" title="编辑分类树">编辑</button></div>'
@@ -1325,7 +1675,7 @@ def build(vault: Path):
             pairing_bad[slug] = bad
 
     l1 = render_l1(papers, "assets/app.css", "assets/library.js", load_tree(vault, papers),
-                   load_favorites(vault), load_favorites(vault, "reading"))
+                   load_favorites(vault), load_favorites(vault, "reading"), load_venues(vault))
     (vault / "index.html").write_text(l1, encoding="utf-8")
     # 本地服务：打开首页并把分类树的编辑保存回 folders.json
     serve_src = Path(__file__).with_name("serve.py")

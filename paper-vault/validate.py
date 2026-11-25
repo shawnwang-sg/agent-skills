@@ -35,7 +35,7 @@ SIMILAR_Q = 0.8              # 和其他论文问题的词集合 Jaccard ≥ 0.8
 SIMILAR_MAX = 0.20
 STATUS_OK, STATUS_BAD = "three_pass_verified", "needs_rework"
 
-FIG_RE = re.compile(r"(?m)^\s*(Figure|Fig\.|Table)\s*(\d+)\s*[:.]")
+FIG_RE = re.compile(r"(?mi)^\s*(Figure|Fig\.|Table)\s*(\d+)\s*[:.]")
 CITE_RE = re.compile(r"(Figure|Fig\.|Table|Section|§|Eq\.|\d)")
 
 
@@ -71,7 +71,7 @@ def figure_labels(folder):
     txt = folder / "source.txt"
     if not txt.exists():
         return set()
-    return {("Table" if m.group(1) == "Table" else "Figure") + " " + m.group(2)
+    return {("Table" if m.group(1).lower() == "table" else "Figure") + " " + m.group(2)
             for m in FIG_RE.finditer(txt.read_text(encoding="utf-8"))}
 
 
