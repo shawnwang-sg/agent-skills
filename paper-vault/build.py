@@ -844,7 +844,7 @@ LIBRARY_JS = r"""
   }
   var local = null; try { local = JSON.parse(LS("pv_folders_local") || "null"); } catch(e) {}
   if (local && local.tree) { start(local); if (served) save(); }
-  else if (served) fetch("folders.json", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
+  else if (served) fetch("api/folders", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){ start(d); }).catch(function(){ start(); });
   else start();
 })();
@@ -1472,6 +1472,13 @@ def render_l2(meta, modes, css_href, reader_href):
 FOLDERS_FILE = "folders.json"
 
 
+def folders_path(vault):
+    """收藏、在读、分类树：优先个人 meta 文件夹（PAPER_VAULT_META 或 ~/OneDrive/self-meta/paper-vault），旧版在 vault 根目录。"""
+    import os
+    meta = Path(os.environ.get("PAPER_VAULT_META") or Path.home() / "OneDrive" / "self-meta" / "paper-vault") / FOLDERS_FILE
+    return meta if meta.exists() else Path(vault) / FOLDERS_FILE
+
+
 def default_tree(papers):
     """按 meta.category 生成一层分类树（第一次没有 folders.json 时用）。"""
     cats = {}
@@ -1484,7 +1491,7 @@ def default_tree(papers):
 
 def load_tree(vault, papers):
     """读 vault/folders.json（用户在首页编辑过的分类树）；没有就按 category 生成。"""
-    f = Path(vault) / FOLDERS_FILE
+    f = folders_path(vault)
     if f.exists():
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
@@ -1498,7 +1505,7 @@ def load_tree(vault, papers):
 def load_favorites(vault, key="favorites"):
     """folders.json 里的收藏（favorites）或正在读（reading）列表，都是 slug。"""
     try:
-        fav = json.loads((Path(vault) / FOLDERS_FILE).read_text(encoding="utf-8")).get(key, [])
+        fav = json.loads(folders_path(vault).read_text(encoding="utf-8")).get(key, [])
         return [s for s in fav if isinstance(s, str)]
     except Exception:
         return []
