@@ -1,7 +1,7 @@
 """paper-vault 本地服务：打开论文库，保存首页分类树、章节概括和评分，并把划词收藏转给语言教练。
 
 用法（在 vault 目录里）：python serve.py [--port 8791] [--no-browser] [--coach http://127.0.0.1:5310]
-只监听 127.0.0.1，零依赖。
+默认只监听 127.0.0.1；vault 里有 lan.local.json（{"enabled": true, "pin": "...."}）时开局域网，别的设备要输密码。零依赖。
 
 接口：
   POST /api/folders        首页分类树、收藏、在读 → folders.json
@@ -11,6 +11,7 @@
   GET/POST /api/coach/...  转发给语言教练（lang-coach）的 /api/collect 系列接口
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -34,6 +35,47 @@ COACH = "http://127.0.0.1:5310"
 COACH_PATHS = ("collect", "collect/ping", "collect/recent")
 JUDGE_MODEL = "sonnet"
 _notes_lock = threading.Lock()
+
+# ── 局域网访问 ──────────────────────────────────────────────────────────────
+# vault 根目录的 lan.local.json：{"enabled": true, "pin": "...."}（不进 Git）。
+# 开了以后监听 0.0.0.0；本机直接用，别的设备第一次要输密码，之后记住一年；连错 8 次锁 10 分钟。
+LAN_FILE = ROOT / "lan.local.json"
+LAN_COOKIE = "pv_pin"
+
+
+def load_lan():
+    try:
+        d = json.loads(LAN_FILE.read_text(encoding="utf-8"))
+        return d if d.get("enabled") and str(d.get("pin") or "") else None
+    except Exception:
+        return None
+
+
+LAN = load_lan()
+LAN_TOKEN = hashlib.sha256(("paper-vault:%s" % LAN["pin"]).encode()).hexdigest() if LAN else None
+_fails = {}
+LOGIN_PAGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>论文阅读库</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4ece0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#2b2620}
+form{background:#fffaf2;border:1px solid #e0d5c4;border-radius:14px;padding:28px 24px;width:min(300px,86vw);text-align:center}
+h1{font-size:18px;margin:0 0 16px}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid #e0d5c4;border-radius:10px}
+button{margin-top:14px;width:100%;padding:10px;font-size:16px;border:none;border-radius:10px;background:#A62B26;color:#fff}p{color:#A62B26;font-size:14px;min-height:20px;margin:10px 0 0}
+</style></head><body><form id="f"><h1>论文阅读库 · 输入密码</h1><input id="pin" type="password" inputmode="numeric" autocomplete="off" autofocus><button>进入</button><p id="msg"></p></form>
+<script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();const r=await fetch('/api/lan-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:document.getElementById('pin').value})});
+if(r.ok)location.reload();else document.getElementById('msg').textContent=(await r.json().catch(()=>({}))).error||'不对';};</script></body></html>"""
+
+
+def lan_addresses():
+    import socket
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith(("127.", "169.254.")):
+                ips.add(ip)
+    except Exception:
+        pass
+    return sorted(ips)
 
 
 def valid_tree(nodes, depth=0):
@@ -200,7 +242,54 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             return self.reply(503, {"error": "语言教练没开（%s）" % self.coach})
 
+    def lan_gate(self):
+        """True = 放行；False = 已经回了登录页 / 401 / 429。"""
+        ip = self.client_address[0]
+        if ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1") or not LAN:
+            return True
+        cookies = dict(c.strip().split("=", 1) for c in (self.headers.get("Cookie") or "").split(";") if "=" in c)
+        if cookies.get(LAN_COOKIE) == LAN_TOKEN:
+            return True
+        path = self.path.split("?")[0]
+        if self.command == "POST" and path == "/api/lan-login":
+            f = _fails.get(ip, [0, 0])
+            if f[1] > time.time():
+                self.reply(429, {"error": "错太多次了，10 分钟后再试"}); return False
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                got = str(json.loads(self.rfile.read(min(n, 1000)).decode("utf-8")).get("pin", ""))
+            except Exception:
+                got = ""
+            if got == str(LAN["pin"]):
+                _fails.pop(ip, None)
+                body = b'{"ok": true}'
+                self.send_response(200)
+                self.send_header("Set-Cookie", "%s=%s; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict" % (LAN_COOKIE, LAN_TOKEN))
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers(); self.wfile.write(body)
+                return False
+            f[0] += 1
+            if f[0] >= 8:
+                f = [0, time.time() + 600]
+            _fails[ip] = f
+            self.reply(401, {"error": "密码不对"}); return False
+        if path.startswith("/api/"):
+            self.reply(401, {"error": "需要先输入密码"}); return False
+        body = LOGIN_PAGE.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers(); self.wfile.write(body)
+        return False
+
+    def do_HEAD(self):
+        if self.lan_gate():
+            super().do_HEAD()
+
     def do_GET(self):
+        if not self.lan_gate():
+            return
         if self.path.startswith("/api/coach/"):
             return self.proxy_coach(self.path[len("/api/coach/"):])
         if self.path.split("?")[0] == "/api/notes":
@@ -208,6 +297,8 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if not self.lan_gate():
+            return
         path = self.path.split("?")[0]
         if not self.same_origin():
             return self.reply(403, {"error": "cross-origin"})
@@ -267,9 +358,12 @@ def main():
     ap.add_argument("--coach", default=COACH, help="语言教练的地址（默认 %s）" % COACH)
     a = ap.parse_args()
     Handler.coach = a.coach.rstrip("/")
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    srv = ThreadingHTTPServer(("0.0.0.0" if LAN else "127.0.0.1", a.port), Handler)
     url = "http://127.0.0.1:%d/index.html" % a.port
     print("paper-vault: %s  (Ctrl+C 退出)" % url)
+    if LAN:
+        for ip in lan_addresses():
+            print("局域网：http://%s:%d/  （别的设备第一次打开要输密码）" % (ip, a.port))
     print("章节概括存在：%s" % NOTES)
     if not a.no_browser:
         webbrowser.open(url)
