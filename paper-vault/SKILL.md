@@ -1,52 +1,59 @@
 ---
 name: paper-vault
 description: >-
-  把一篇论文「加工」成本地静态、翻页式、中英对照的三遍法阅读库（鸟瞰/理解/吃透）。
+  把一篇论文「加工」成本地静态、翻页式、中英对照的三遍法阅读库（鸟瞰/理解/吃透），
+  按 Keshav《How to Read a Paper》的三遍法逐遍产出，带原文逐字核验和质量门。
   触发：当用户给出 arxiv 链接 / 本地 PDF / 论文截图 / 飞书文档，并说「加工这篇」「读这篇论文」
-  「加进阅读库」「做成三遍法」「paper-vault」「整理成中英对照」时。区别于普通「总结一下」
-  （本 skill 要保留论文原文句段、逐级加深、生成可翻页站点）和低密度幻灯片。仅本地私用，
-  不公开发布版权全文。
+  「加进阅读库」「做成三遍法」「精读这篇」「重做这篇」「paper-vault」「整理成中英对照」时。
+  区别于普通「总结一下」（本 skill 要保留论文原文句段、逐遍加深、生成可翻页站点）和低密度幻灯片。
+  仅本地私用，不公开发布版权全文。
 ---
 
 # paper-vault
 
 把论文加工成 **L1 论文库 → L2 单篇三模式门户 → L3 翻页阅读器** 的本地阅读库。
-一份引擎 `build.py`，三种入口（本 skill / `AGENTS.md` / 手动直跑）。
+一份引擎 `build.py` + 质量门 `validate.py`，三种入口（本 skill / `AGENTS.md` / 手动直跑）。
 
-## 第一条规矩
+## 硬规则
 
-- **标题用论文原始英文名 + 作者**，不译不改。
-- **严格中英对照（硬规则）**：每个内容块**必须同时给 en（原文句段）+ zh（准确翻译）**，缺一不可（`code`/`math` 例外）。
-  build 会做「中英对照校验」，缺对照即报错并以退出码 1 结束。别把原文改写成摘要。
-- 三模式是 **三档原文密度**：鸟瞰≈1/5、理解≈1/3、吃透≈1/2，**允许 ±20% 误差**。
-  在 `meta.source_words` 写全文英文词数；build 会自检并标 OK/LOW/HIGH，超界则**修订该模式重跑，最多 2 次**。
-- **仅本地私用**：含论文全文的内容只进 private 私库的 `reading` 分支，绝不推公开 `master`。
+1. **三遍 = 三次不同的阅读，各有固定产出**（详见 `references/three-pass.md`）：
+   - 鸟瞰：决定值不值得读。
+   - 理解：抓主线和证据，全部图表都要讲。
+   - 吃透：虚拟重做，包括推演、分类问答，以及强项、弱项和隐藏假设。
+   原文比例只是其中一项检查。
+2. **原文必须是真原文。** 原文块标 `origin: "paper"` 和 `source_page`，能在 PDF 那一页逐字找到，不能改写、不能重复。讲解块标 `origin: "editorial"`，不算进原文比例。
+3. **先有原始 PDF，再动笔。** 先准备好 `source.pdf`、`source.txt`、`source.json`；全文词数从 PDF 提取，不手填。
+4. **图表全覆盖。** 每张编号图和表都要用原页裁图，在 `assets/provenance.json` 记页码、裁框和哈希，并写解读。
+5. **一篇一篇做，先出样稿。** 新批次先做 1 篇给用户看，认可后再继续。每篇单独校验、单独提交；禁止多篇一起生成、一起提交。
+6. **不合格不算完成。** `reading_status` 只能由 `validate.py --write` 写入。没通过就是 `needs_rework`。「下载完成」「页面生成成功」都不算精读完成。
+7. **标题用论文原始英文名和作者**，不译不改。每个内容块中英成对。
+8. **仅本地私用**：含论文全文的仓库必须是 private，不公开发布。
 
-## 四步工作流（§详见 references）
+## 工作流
 
-1. **抓全文 + 结构 + 图**（见 `references/fetch.md`）。
-2. **写 `papers/<slug>/paper.json`**：meta（原名 / 作者 / source / url / 分类 / 300–500 字中文概述，结论先行 / **source_words 全文英文词数**）
-   + 三模式内容（见 `references/modes.md` 与 `references/schema.md`；吃透模式固定三段、≥10 个 qa、尽量保留原文）。
-   图用 `figure`（优先原图 `src`，下不到就内联 `svg` 重绘）。
-3. **生成 + 自检**：`python3 build.py --vault <vault>` 会打印各模式比例 OK/LOW/HIGH。
-   若有 LOW/HIGH，修订对应模式（LOW 补原文、HIGH 精简）重跑，**最多 2 次**（用 `--strict` 可让超界返回退出码 1）。
-4. **打开** `<vault>/index.html`。
-   reading 分支上 `git add -f papers index.html assets` 提交；引擎改动走 master。
+1. **抓原文**：下载 PDF，提取文本、页数、词数，裁出全部图表（见 `references/fetch.md`）。
+2. **写 `papers/<slug>/paper.json`**：
+   - meta：原名、作者、source、url、分类、300–500 字中文概述（结论先行）、`source_words`。
+   - 按 `references/three-pass.md` 依次写鸟瞰、理解、吃透，数据格式见 `references/schema.md`。
+3. **过质量门**：`python validate.py --vault <vault> <slug>`，按报告补齐，直到通过（门槛见 `references/quality-gates.md`）。
+   通过后运行 `validate.py --write`，写入审核记录和状态。
+4. **生成**：`python build.py --vault <vault>`（加 `--strict` 时，质量门不合格以退出码 1 结束）。打开 `<vault>/index.html` 检查。
+5. **提交**：这一篇单独提交。
 
 ## 站点自带能力（生成后即有，无需额外说明）
 
-- L2 顶栏：模式切换（鸟瞰/理解/吃透）、语言切换（对照/原文/中文）、目录、A−/A+ 字号、主题◐、全屏。
-- 键盘：`←/→` 翻页、`1/2/3` 切模式、`L` 语言、`T` 目录、`F` 全屏、`Esc` 关目录；触摸横滑翻页。
-- L1：分类 chip 筛选、卡片折叠展开概述、三套主题（暖纸/纯白/暗色）。
+- **L2 顶栏**：模式切换（鸟瞰 / 理解 / 吃透）、语言切换（对照 / 原文 / 中文）、目录、A− / A+ 字号、主题◐、全屏、原文 PDF。
+- **键盘**：`←/→` 翻页，`1/2/3` 切模式，`L` 语言，`T` 目录，`F` 全屏，`Esc` 关目录；触摸屏横滑翻页。
+- **L1**：左侧可编辑的分类树（`folders.json`，用 `python serve.py` 打开可以保存）、卡片折叠概述、三套主题。
 
 ## 按需读表（references/）
 
-- `fetch.md` — 抓取规范（arxiv HTML 优先、PDF、截图、飞书、图表）。
-- `modes.md` — 三模式内容规范（比例目标 + 结构）。
-- `schema.md` — paper.json / block 数据模型。
-- `classify.md` — 分类规范（动态 2–6 字中文类目，复用优先）。
+- `three-pass.md`：三遍各自的目的、必备部分、怎么做。
+- `quality-gates.md`：质量门的全部门槛和用法。
+- `fetch.md`：抓原文、裁图规范。
+- `schema.md`：paper.json 和 block 数据模型（含 `origin`、`source_page`、`kind`、`cat`）。
+- `classify.md`：分类规范。
 
 ## 合规
 
-论文全文 + 翻译 = 版权/演绎内容，**仅本地私用**。`.gitignore` 默认只提交引擎、忽略论文内容；
-公开仓只含生成器。重写代码用 MIT；保留 frontend-slides 的 MIT 署名（见 `NOTICE-frontend-slides-MIT.txt`）。
+论文全文和翻译属于版权或演绎内容，**仅本地私用**。重写的代码用 MIT 许可；保留 frontend-slides 的 MIT 署名（见 `NOTICE-frontend-slides-MIT.txt`）。

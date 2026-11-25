@@ -2,6 +2,17 @@
 
 目标：拿到论文**全文 + 章节结构 + 图**，供写 paper.json 用。避开 PDF 双栏/公式乱码。
 
+## 第一步永远是原始 PDF（质量门要求）
+
+1. 下载原始 PDF 存为 `papers/<slug>/source.pdf`。优先官方或作者主页，一次只下一篇，不付费。
+2. 用 pymupdf 逐页提取文本，存为 `source.txt`（页与页之间空一行）。
+3. 写 `source.json`：`url`、`pages`、`bytes`、`sha256`、`source_words`（`source.txt` 按空白切词的词数）、下载日期。
+   `meta.source_words` 必须和它相同。
+4. 裁图：每张编号的 Figure / Table 用 `page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), clip=rect)` 从原页裁出，
+   存进 `assets/`（命名为 `fig3.png`、`table2.png`）。在 `assets/provenance.json` 记
+   `{"file","label","source_page","rect","sha256","source_pdf_sha256"}`。
+5. 下面的 HTML / LaTeX 来源只用来帮助理解结构和公式；写进 `en` 的原文以 PDF 文本为准，便于逐字核验。
+
 ## arxiv（优先 HTML）
 
 1. 把 `arxiv.org/abs/<ID>` 或 `arxiv.org/pdf/<ID>` 归一为 ID。

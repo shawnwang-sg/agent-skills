@@ -40,6 +40,18 @@
 | `code` | `text` | 代码块（等宽） |
 | `pagebreak` | — | 在本节内强制分页（多页时页标题加 `(part/parts)`） |
 
+## 三遍法字段（质量门用，见 three-pass.md）
+
+| 字段 | 位置 | 含义 |
+|---|---|---|
+| `origin` | `p` / `quote` 等内容块 | `"paper"` 表示论文原文，`"editorial"` 表示讲解。原文比例只统计 `"paper"` |
+| `source_page` | 原文块 | PDF 页码（从 1 开始）；原文必须能在这一页逐字找到 |
+| `kind` | section | 这一节是哪一部分：鸟瞰用 `conclusion` / `five_c` / `excerpts` / `verdict` / `questions`；理解用 `chapter` / `evidence` / `open_questions`；吃透用 `reproduction` / `derivations` / `qa` / `critique` / `future` / `structure` |
+| `cat` | `qa` 块 | 问答类别：`reproduce` / `assumption` / `failure` / `evidence` / `compare` |
+| `reading_status` | meta | 只由 `validate.py --write` 写入：`three_pass_verified` 或 `needs_rework` |
+
+论文目录里另有 `source.pdf`、`source.txt`、`source.json`（`sha256` / `pages` / `source_words`），以及 `assets/provenance.json`（每张裁图的 `file` / `label` / `source_page` / `rect` / `sha256`）。
+
 ## 渲染约定
 
 - **严格中英对照（硬规则）**：每个内容块必须**同时给 en 与 zh**——`p`/`h3`/`quote` 的 `en`+`zh`、
