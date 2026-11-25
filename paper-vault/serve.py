@@ -4,7 +4,8 @@
 默认只监听 127.0.0.1；vault 里有 lan.local.json（{"enabled": true, "pin": "...."}）时开局域网，别的设备要输密码。零依赖。
 
 接口：
-  POST /api/folders        首页分类树、收藏、在读 → folders.json
+  GET  /api/folders        读首页分类树、收藏、在读
+  POST /api/folders        首页分类树、收藏、在读 → folders.json（和 notes.json 一起放在个人 meta 文件夹）
   GET  /api/notes          读全部章节概括
   POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/paper-vault/，可用环境变量 PAPER_VAULT_META 改）
   POST /api/judge          保存概括并调用本机已登录的 claude CLI 打分（1–10）和点评 → notes.json
@@ -26,10 +27,67 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-FOLDERS = ROOT / "folders.json"
 # 章节概括是个人数据：默认存进 self-meta 仓库的 paper-vault 文件夹（有的话），否则存在 vault 里
 _META = Path(os.environ.get("PAPER_VAULT_META") or Path.home() / "OneDrive" / "self-meta" / "paper-vault")
-NOTES = (_META if _META.parent.is_dir() else ROOT) / "notes.json"
+META_DIR = _META if _META.parent.is_dir() else ROOT     # 个人数据：self-meta/paper-vault（没有 self-meta 时退回 vault 根目录）
+NOTES = META_DIR / "notes.json"
+FOLDERS = META_DIR / "folders.json"
+META_SCHEMA = 1                                          # 个人数据格式版本：notes / folders 结构改了就 +1
+_meta_lock = threading.Lock()
+
+
+def migrate_folders():
+    """旧版把 folders.json 放在 vault 根目录（进了程序仓库）：第一次启动时挪到个人 meta 文件夹，旧文件留着不删。"""
+    old = ROOT / "folders.json"
+    if META_DIR != ROOT and not FOLDERS.exists() and old.exists():
+        META_DIR.mkdir(parents=True, exist_ok=True)
+        FOLDERS.write_text(old.read_text(encoding="utf-8"), encoding="utf-8")
+        print("已把收藏、在读和分类树挪到 %s" % FOLDERS)
+
+
+def owner_id():
+    try:
+        return json.loads((META_DIR.parent / "owner.json").read_text(encoding="utf-8")).get("id")
+    except Exception:
+        return None
+
+
+def bump_meta():
+    """每次写个人数据后更新 meta.json：owner、revision +1、各文件哈希（约定见 self-meta/SPEC.md）。"""
+    if META_DIR == ROOT:
+        return
+    import hashlib as _h
+    import socket as _s
+    with _meta_lock:
+        f = META_DIR / "meta.json"
+        try:
+            old = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            old = {}
+        tables = {}
+        for name in ("notes", "folders"):
+            fp = META_DIR / ("%s.json" % name)
+            if fp.exists():
+                b = fp.read_bytes()
+                d = json.loads(b.decode("utf-8"))
+                rows = sum(len(v) for v in d.get("summaries", {}).values()) if name == "notes" else len(d.get("favorites", [])) + len(d.get("reading", []))
+                tables[name] = {"rows": rows, "hash": "sha256:" + _h.sha256(b).hexdigest()}
+        meta = {"format": "paper-vault-meta", "version": 1, "schema": META_SCHEMA, "owner": owner_id() or old.get("owner"),
+                "revision": int(old.get("revision") or 0) + 1, "base": int(old.get("revision") or 0),
+                "device": _s.gethostname(), "exportedAt": time.strftime("%Y-%m-%dT%H:%M:%S"), "tables": tables}
+        tmp = f.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, f)
+
+
+def owner_mismatch():
+    """个人 meta 文件夹属于另一个人时拒绝写入（只读还能看）。"""
+    try:
+        m = json.loads((META_DIR / "meta.json").read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    me = owner_id()
+    return bool(m.get("owner") and me and m["owner"] != me)
 MAX_BODY = 4 * 1024 * 1024
 COACH = "http://127.0.0.1:5310"
 COACH_PATHS = ("collect", "collect/ping", "collect/recent")
@@ -118,6 +176,7 @@ def add_note(slug, key, entry):
         d = load_notes()
         d["summaries"].setdefault(slug, {}).setdefault(key, []).append(entry)
         write_json(NOTES, d)
+    bump_meta()
 
 
 def section_text(slug, mode, sec, title):
@@ -295,6 +354,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.proxy_coach(self.path[len("/api/coach/"):])
         if self.path.split("?")[0] == "/api/notes":
             return self.reply(200, load_notes())
+        if self.path.split("?")[0] in ("/api/folders", "/folders.json"):
+            try:
+                return self.reply(200, json.loads(FOLDERS.read_text(encoding="utf-8")))
+            except Exception:
+                return self.reply(404, {"error": "还没有 folders.json"})
         return super().do_GET()
 
     def do_POST(self):
@@ -324,9 +388,15 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
                     return self.reply(400, {"error": "bad " + key})
                 lists[key] = v
+            if owner_mismatch():
+                return self.reply(409, {"error": "个人 meta 文件夹属于另一个人，没有写入"})
+            FOLDERS.parent.mkdir(parents=True, exist_ok=True)
             write_json(FOLDERS, {"version": 1, "favorites": lists["favorites"], "reading": lists["reading"], "tree": data["tree"]})
+            bump_meta()
             return self.reply(200, {"ok": True})
 
+        if path in ("/api/notes", "/api/judge") and owner_mismatch():
+            return self.reply(409, {"error": "个人 meta 文件夹属于另一个人，没有写入"})
         if path in ("/api/notes", "/api/judge"):
             slug, mode, text = data.get("slug"), data.get("mode"), (data.get("text") or "").strip()
             sec, title = data.get("sec"), data.get("title") or ""
@@ -365,7 +435,8 @@ def main():
     if LAN:
         for ip in lan_addresses():
             print("局域网：http://%s:%d/  （别的设备第一次打开要输密码）" % (ip, a.port))
-    print("章节概括存在：%s" % NOTES)
+    migrate_folders()
+    print("个人数据（章节概括、收藏、在读、分类树）存在：%s" % META_DIR)
     if not a.no_browser:
         webbrowser.open(url)
     try:
