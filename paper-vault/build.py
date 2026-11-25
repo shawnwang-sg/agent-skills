@@ -400,7 +400,7 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 }
 
 /* ── 我的概括（理解每一节末尾 / 鸟瞰的一句话结论）── */
-.mysum{margin:28px 0 8px; padding:14px 16px; border:1px dashed var(--accent2); border-radius:12px; background:var(--card);
+.mysum{margin:0; padding:14px 16px; border:1px dashed var(--accent2); border-radius:12px; background:var(--card);
   font-family:var(--font-zh); font-size:calc(14px*var(--read)); line-height:1.7;}
 .mysum .ms-head{font-weight:700; color:var(--accent2);}
 .mysum .ms-sub{font-weight:400; color:var(--soft); font-size:12px; margin-left:8px;}
@@ -419,7 +419,11 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 .mysum .ms-res ul{margin:2px 0; padding-left:20px;}
 .mysum .ms-res q{display:block; color:var(--soft); font-style:italic; font-family:var(--font-en, serif); quotes:none;}
 .mysum details summary{cursor:pointer; color:var(--accent2); margin-top:8px;}
-.page.veiled .col > :not(.pagetitle):not(.mysum){filter:blur(7px); user-select:none; pointer-events:none;}
+.mysum-wrap{margin:18px 0 6px; text-align:right;}
+.mysum-wrap .mysum{text-align:left; margin-top:8px;}
+.ms-toggle{border:1px solid var(--line); background:transparent; color:var(--accent2); border-radius:999px; padding:3px 12px;
+  font:13px var(--font-zh); cursor:pointer; opacity:.8;}
+.ms-toggle:hover,.ms-toggle.on{opacity:1; border-color:var(--accent2);}
 /* ── 划词收藏 → 语言教练 ── */
 .pick{position:fixed; z-index:50; display:flex; gap:4px; padding:4px; border-radius:9px; background:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 .pick button{border:0; background:transparent; color:var(--page); font:13px var(--font-zh); padding:4px 10px; border-radius:6px; cursor:pointer;}
@@ -1062,12 +1066,20 @@ READER_JS = r"""
   }
   function sumBox(mk, sec, opts){
     var key = mk + ":" + sec.idx, hist = ((NOTES[SLUG] || {})[key]) || [], last = hist[hist.length - 1];
-    var box = E("div", "mysum");
+    var wrap = E("div", "mysum-wrap"), tg = E("button", "ms-toggle");
+    var box = E("div", "mysum"); box.hidden = true;
+    function label(){
+      var l = hist[hist.length - 1], r = l && l.result;
+      tg.textContent = "✍ " + (l ? opts.head + (r ? " · " + r.score + "/10" : " · 已写") : opts.btn);
+    }
+    label();
+    tg.addEventListener("click", function(){ box.hidden = !box.hidden; tg.classList.toggle("on", !box.hidden); if (!box.hidden) ta.focus(); });
+    wrap.appendChild(tg); wrap.appendChild(box);
     var h = E("div", "ms-head", opts.head); h.appendChild(E("span", "ms-sub", opts.sub)); box.appendChild(h);
     var ta = E("textarea"); ta.placeholder = opts.ph; if (last) ta.value = last.text; box.appendChild(ta);
     var bar = E("div", "ms-bar"), bj = E("button", "primary", "提交并评分"), bs = E("button", "", "只保存"), st = E("span", "ms-st");
     bar.appendChild(bj); bar.appendChild(bs);
-    if (opts.skip) { var bk = E("button", "", "跳过，直接看"); bk.addEventListener("click", function(){ opts.skip(); }); bar.appendChild(bk); }
+    var bc = E("button", "", "收起"); bc.addEventListener("click", function(){ box.hidden = true; tg.classList.remove("on"); }); bar.appendChild(bc);
     bar.appendChild(st); box.appendChild(bar); box.appendChild(E("div", "ms-res"));
     if (hist.length) st.textContent = "已写过 " + hist.length + " 次，最近 " + last.at;
     if (!served) { st.textContent = "用 python serve.py 打开才能保存和评分"; bj.disabled = bs.disabled = true; }
@@ -1082,28 +1094,24 @@ READER_JS = r"""
           (NOTES[SLUG] = NOTES[SLUG] || {})[key] = hist.concat([d.entry]); hist = NOTES[SLUG][key];
           st.textContent = (api === "judge" ? "已评分" : "已保存") + " · " + d.entry.at;
           if (d.entry.result) renderResult(box, d.entry);
-          if (opts.done) opts.done();
+          label();
         })
         .catch(function(e){ st.textContent = "失败：" + e.message; })
         .then(function(){ bj.disabled = bs.disabled = false; });
     }
     bj.addEventListener("click", function(){ send("judge"); });
     bs.addEventListener("click", function(){ send("notes"); });
-    return box;
+    return wrap;
   }
   function addSummaryBoxes(){
     if (!SLUG) return;
     sections("grasp").forEach(function(sec){
       var col = sec.pages[sec.pages.length - 1].querySelector(".col"); if (!col) return;
-      col.appendChild(sumBox("grasp", sec, {head:"✍ 我的概括", sub:"用自己的话写：这一节在说什么、靠什么证据。中英文都行。", ph:"这一节说的是……"}));
+      col.appendChild(sumBox("grasp", sec, {btn:"写这一节的概括", head:"我的概括", sub:"用自己的话写：这一节在说什么、靠什么证据。中英文都行。", ph:"这一节说的是……"}));
     });
     sections("skim").forEach(function(sec){
       var pg = sec.pages[0]; if (!pg.classList.contains("page--conclusion")) return;
-      var hist = ((NOTES[SLUG] || {})["skim:" + sec.idx]) || [];
-      if (!hist.length) pg.classList.add("veiled");
-      var open = function(){ pg.classList.remove("veiled"); };
-      var t = pg.querySelector(".pagetitle"), box = sumBox("skim", sec, {head:"✍ 先写我的一句话", sub:"只看了标题、摘要和章节名，你觉得这篇论文解决了什么、靠什么、结果如何？写完再看下面的结论。", ph:"这篇论文……", skip:open, done:open});
-      if (t) t.after(box); else pg.querySelector(".col").prepend(box);
+      pg.querySelector(".col").appendChild(sumBox("skim", sec, {btn:"写我的一句话", head:"我的一句话", sub:"用一句话说：这篇论文解决了什么、靠什么、结果如何。", ph:"这篇论文……"}));
     });
   }
 
