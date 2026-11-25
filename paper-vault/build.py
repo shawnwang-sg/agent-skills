@@ -436,6 +436,15 @@ FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><re
 LIBRARY_JS = r"""
 /* paper-vault library.js —— L1 行为 */
 (function(){
+  // 右下角「i」：打开本库的规划页 roadmap.html（以后要做的事）
+  (function(href, bottom){
+    if (document.getElementById("roadmap-i")) return;
+    var a = document.createElement("a");
+    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = "以后要做的事"; a.textContent = "i";
+    a.style.cssText = "position:fixed;right:16px;bottom:" + bottom + "px;z-index:2147483000;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#A62B26;color:#fff;text-decoration:none;font:italic 700 16px/1 Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.85";
+    document.body.appendChild(a);
+  })("roadmap.html", 16);
+
   var THEMES = ["warm","paperwhite","slate"];
   function applyTheme(t){ document.documentElement.setAttribute("data-theme", t); }
 
@@ -810,6 +819,15 @@ LIBRARY_JS = r"""
 READER_JS = r"""
 /* paper-vault reader.js —— L2 翻页阅读器行为 */
 (function(){
+
+  // 右下角「i」：打开本库的规划页 roadmap.html（以后要做的事）
+  (function(href, bottom){
+    if (document.getElementById("roadmap-i")) return;
+    var a = document.createElement("a");
+    a.id = "roadmap-i"; a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = "以后要做的事"; a.textContent = "i";
+    a.style.cssText = "position:fixed;right:16px;bottom:" + bottom + "px;z-index:2147483000;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#A62B26;color:#fff;text-decoration:none;font:italic 700 16px/1 Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.85";
+    document.body.appendChild(a);
+  })("../../roadmap.html", 44);
   // 标签页图标：已生成的阅读页没有 <link rel=icon>，这里补上
   if (!document.querySelector("link[rel=icon]")) {
     var ic = document.createElement("link"); ic.rel = "icon"; ic.type = "image/svg+xml"; ic.href = "../../assets/favicon.svg";
