@@ -17,7 +17,8 @@ from pathlib import Path
 
 # ── 门槛（与 references/quality-gates.md 保持一致）────────────────────────────
 RATIO = {"skim": (0.15, 0.25), "grasp": (0.30, 0.45), "master": (0.40, 0.60)}
-SKIM_KINDS = {"conclusion", "five_c", "excerpts", "verdict", "questions"}
+SKIM_KINDS = {"conclusion", "five_c", "concepts", "excerpts", "verdict", "questions"}
+CONCEPTS_MIN_H3, CONCEPTS_MIN_WORDS = 8, 800   # 鸟瞰「技术分析与基础概念」页
 GRASP_KINDS = {"evidence", "open_questions"}
 MASTER_KINDS = {"reproduction", "derivations", "qa", "critique", "future", "structure"}
 QA_CATS = {"reproduce", "assumption", "failure", "evidence", "compare"}
@@ -168,6 +169,16 @@ def validate(folder, others_q=None):
             for b in s["blocks"] if b.get("type") == "terms"]
     if five and sum(len(b.get("items", [])) for b in five) < 5:
         fails.append("5C 卡不足 5 项")
+
+    # 鸟瞰的「技术分析与基础概念」页：≥8 个小标题（概念 + 技术分析），讲解 ≥800 英文词
+    con = [s for s in modes["skim"]["sections"] if s.get("kind") == "concepts"]
+    con_h3 = sum(1 for s in con for b in s["blocks"] if b.get("type") == "h3")
+    con_words = sum(words(b.get("en")) + sum(words(i.get("en")) for i in b.get("items", []))
+                    for s in con for b in s["blocks"] if b.get("type") != "h3")
+    M["concepts_h3"], M["concepts_words"] = con_h3, con_words
+    if con and (con_h3 < CONCEPTS_MIN_H3 or con_words < CONCEPTS_MIN_WORDS):
+        fails.append("技术分析与基础概念页：%d 个小标题、%d 个英文词，至少 %d 个、%d 词"
+                     % (con_h3, con_words, CONCEPTS_MIN_H3, CONCEPTS_MIN_WORDS))
 
     # 4. 第二遍：理解
     miss = GRASP_KINDS - set(kinds["grasp"])
