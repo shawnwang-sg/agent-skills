@@ -420,7 +420,7 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 .mysum .ms-res q{display:block; color:var(--soft); font-style:italic; font-family:var(--font-en, serif); quotes:none;}
 .mysum details summary{cursor:pointer; color:var(--accent2); margin-top:8px;}
 .page.veiled .col > :not(.pagetitle):not(.mysum){filter:blur(7px); user-select:none; pointer-events:none;}
-/* ── 划词收藏 → 英语教练 ── */
+/* ── 划词收藏 → 语言教练 ── */
 .pick{position:fixed; z-index:50; display:flex; gap:4px; padding:4px; border-radius:9px; background:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 .pick button{border:0; background:transparent; color:var(--page); font:13px var(--font-zh); padding:4px 10px; border-radius:6px; cursor:pointer;}
 .pick button:hover{background:rgba(255,255,255,.15);}
@@ -431,6 +431,8 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 # ─────────────────────────────────────────────────────────────────────────────
 # §6.3 L1 行为（library.js）
 # ─────────────────────────────────────────────────────────────────────────────
+FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="22" fill="#A62B26"/><g fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 31 Q35 25 50 33 Q65 25 80 31 V73 Q65 67 50 75 Q35 67 20 73 Z"/><path d="M50 33 V75"/></g></svg>'
+
 LIBRARY_JS = r"""
 /* paper-vault library.js —— L1 行为 */
 (function(){
@@ -808,6 +810,11 @@ LIBRARY_JS = r"""
 READER_JS = r"""
 /* paper-vault reader.js —— L2 翻页阅读器行为 */
 (function(){
+  // 标签页图标：已生成的阅读页没有 <link rel=icon>，这里补上
+  if (!document.querySelector("link[rel=icon]")) {
+    var ic = document.createElement("link"); ic.rel = "icon"; ic.type = "image/svg+xml"; ic.href = "../../assets/favicon.svg";
+    document.head.appendChild(ic);
+  }
   var THEMES = ["warm","paperwhite","slate"];
   var LANGS  = ["both","en","zh"];
 
@@ -1082,7 +1089,7 @@ READER_JS = r"""
     });
   }
 
-  // ── 划词收藏 → 英语教练（serve.py 转发到 lang-coach 的 /api/collect）──
+  // ── 划词收藏 → 语言教练（serve.py 转发到 lang-coach 的 /api/collect）──
   var pick = null;
   function hidePick(){ if (pick) { pick.remove(); pick = null; } }
   function toast(msg){
@@ -1102,8 +1109,8 @@ READER_JS = r"""
         source:{app:"paper-vault", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
       .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
       .then(function(d){
-        if (kind === "word") { var w = d.word || {}; toast("已收进英语教练 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
-        else toast("已收进英语教练的难句本，打开英语教练可看主干拆解。");
+        if (kind === "word") { var w = d.word || {}; toast("已收进语言教练 · 学术英语：" + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
+        else toast("已收进语言教练的难句本，打开语言教练可看主干拆解。");
       })
       .catch(function(e){ toast("没收成：" + e.message); });
   }
@@ -1487,12 +1494,13 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>论文阅读库</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="%(css)s">
 </head>
 <body class="l1">
 <header class="libhead">
   <h1 class="libtitle">论文阅读库</h1>
-  <span class="libcount">%(count)d 篇 · 三遍法 · 中英对照</span>
+  <span class="libcount">%(count)d 篇 · 中英对照</span>
   <span class="spacer"></span>
   <input class="libsearch" id="q" type="search" placeholder="搜索论文、作者、编号（按 / ）" autocomplete="off">
   <button class="iconbtn" id="themeBtn" title="主题">◐</button>
@@ -1644,6 +1652,7 @@ def build(vault: Path):
     (assets / "app.css").write_text(APP_CSS, encoding="utf-8")
     (assets / "library.js").write_text(LIBRARY_JS, encoding="utf-8")
     (assets / "reader.js").write_text(READER_JS, encoding="utf-8")
+    (assets / "favicon.svg").write_text(FAVICON_SVG, encoding="utf-8")
 
     papers = []
     all_violations = {}   # slug -> [(mode, ratio, target), ...]

@@ -1,4 +1,4 @@
-"""paper-vault 本地服务：打开论文库，保存首页分类树、章节概括和评分，并把划词收藏转给英语教练。
+"""paper-vault 本地服务：打开论文库，保存首页分类树、章节概括和评分，并把划词收藏转给语言教练。
 
 用法（在 vault 目录里）：python serve.py [--port 8791] [--no-browser] [--coach http://127.0.0.1:5310]
 只监听 127.0.0.1，零依赖。
@@ -8,7 +8,7 @@
   GET  /api/notes          读全部章节概括
   POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/paper-vault/，可用环境变量 PAPER_VAULT_META 改）
   POST /api/judge          保存概括并调用本机已登录的 claude CLI 打分（1–10）和点评 → notes.json
-  GET/POST /api/coach/...  转发给英语教练（lang-coach）的 /api/collect 系列接口
+  GET/POST /api/coach/...  转发给语言教练（lang-coach）的 /api/collect 系列接口
 """
 import argparse
 import json
@@ -196,9 +196,9 @@ class Handler(SimpleHTTPRequestHandler):
                 msg = json.loads(e.read().decode("utf-8")).get("error")
             except Exception:
                 msg = None
-            return self.reply(e.code, {"error": msg or "英语教练返回 %d" % e.code})
+            return self.reply(e.code, {"error": msg or "语言教练返回 %d" % e.code})
         except Exception:
-            return self.reply(503, {"error": "英语教练没开（%s）" % self.coach})
+            return self.reply(503, {"error": "语言教练没开（%s）" % self.coach})
 
     def do_GET(self):
         if self.path.startswith("/api/coach/"):
@@ -264,7 +264,7 @@ def main():
     ap = argparse.ArgumentParser(description="paper-vault 本地服务")
     ap.add_argument("--port", type=int, default=8791)
     ap.add_argument("--no-browser", action="store_true")
-    ap.add_argument("--coach", default=COACH, help="英语教练的地址（默认 %s）" % COACH)
+    ap.add_argument("--coach", default=COACH, help="语言教练的地址（默认 %s）" % COACH)
     a = ap.parse_args()
     Handler.coach = a.coach.rstrip("/")
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
