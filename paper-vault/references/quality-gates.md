@@ -8,7 +8,8 @@
 | 原始材料 | `source.pdf` / `source.txt` / `source.json` 齐全；PDF 的 sha256 和记录一致；`meta.source_words` 等于从 PDF 提取的词数 |
 | 原文真实 | 每个 `origin: "paper"` 块都有 `source_page`，并能在那一页逐字找到；同一模式里不重复 |
 | 原文比例（只算原文块） | 鸟瞰 15–25%，理解 30–45%，吃透 40–60% |
-| 鸟瞰结构 | 有 `conclusion`、`five_c`、`excerpts`、`verdict`、`questions`；5C 满 5 项 |
+| 鸟瞰结构 | 有 `conclusion`、`five_c`、`concepts`、`excerpts`、`verdict`、`questions`；5C 满 5 项 |
+| 技术分析与基础概念 | `concepts` 页 ≥ 8 个小标题，讲解 ≥ 800 个英文词 |
 | 理解结构 | ≥ 6 节；术语 ≥ 8 个；`evidence` 证据链 ≥ 3 条；有 `open_questions` |
 | 图表覆盖 | `source.txt` 里出现的每个 "Figure N" / "Table N" 都在 `assets/provenance.json` 里有裁图；引用的图片文件都存在 |
 | 吃透原文 | 正文 ≥ 8000 词时 ≥ 40 段，更短的论文按「词数 ÷ 200」折算（最少 10 段） |
