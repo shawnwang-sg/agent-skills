@@ -68,7 +68,7 @@ body.lang-zh .zh{color:var(--ink);}           /* zh-only 时把 zh 提为主色 
 /* ─────────────────── L1 论文库首页 ─────────────────── */
 .l1{background:var(--paper);}
 .l1 header.libhead{
-  max-width:1180px; margin:0 auto; padding:54px 40px 18px;
+  max-width:1480px; margin:0 auto; padding:40px 40px 6px;
   display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
 }
 .l1 .libtitle{
@@ -83,14 +83,50 @@ body.lang-zh .zh{color:var(--ink);}           /* zh-only 时把 zh 提为主色 
 }
 .iconbtn:hover{border-color:var(--accent);}
 
-#chips{max-width:1180px; margin:0 auto; padding:6px 40px 10px; display:flex; gap:8px; flex-wrap:wrap;}
-.chip{
-  background:var(--card); border:1px solid var(--line); color:var(--soft);
-  border-radius:999px; padding:5px 14px; cursor:pointer; font-size:calc(14px*var(--read));
+/* 左侧分类文件夹栏（类似 Zotero 的集合），右侧只显示选中分类的论文 */
+.libwrap{max-width:1480px; margin:0 auto; padding:0 40px; display:flex; gap:28px; align-items:flex-start;}
+.folders{
+  flex:0 0 240px; position:sticky; top:16px; margin-top:22px;
+  max-height:calc(100vh - 32px); overflow:auto;
+  background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px;
 }
-.chip.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+.fbar{display:flex; align-items:center; gap:6px; padding:4px 6px 8px;}
+.fbar .ftitle{flex:1; color:var(--soft); font-size:12px; letter-spacing:.08em;}
+.fbtn{background:var(--paper); border:1px solid var(--line); color:var(--ink); border-radius:7px;
+  padding:2px 9px; font-size:12px; cursor:pointer;}
+.fbtn:hover{border-color:var(--accent);}
+.folder{
+  display:flex; align-items:center; gap:6px; width:100%; box-sizing:border-box;
+  border-radius:8px; padding:6px 10px; cursor:pointer; user-select:none;
+  color:var(--ink); font-size:calc(14px*var(--read)); font-family:var(--font-zh);
+}
+.folder:hover{background:var(--paper);}
+.folder .twist{flex:0 0 12px; color:var(--soft); font-size:11px;}
+.folder .fname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.folder .fcount{color:var(--soft); font-size:12px;}
+.folder .fop{background:transparent; border:0; color:var(--soft); cursor:pointer; padding:0 3px; font-size:13px;}
+.folder .fop:hover{color:var(--accent);}
+.folder:not(:hover):not(.on) .fop{display:none;}   /* 编辑按钮只在悬停 / 选中的分类上出现，不挤名字 */
+.folder.on{background:var(--accent); color:#fff;}
+.folder.on .twist,.folder.on .fcount,.folder.on .fop{color:#fff;}
+.folder.drop{outline:2px dashed var(--accent); outline-offset:-2px;}
+.folder.all{font-weight:600; border-bottom:1px solid var(--line); border-radius:8px 8px 0 0; margin-bottom:4px;}
+.fhint{color:var(--soft); font-size:12px; padding:6px 8px 2px; line-height:1.6;}
+.fhint:empty{display:none;}
+.fhint.bad{color:var(--accent);}
+.subhead{font-family:var(--font-zh); font-weight:600; color:var(--soft); font-size:calc(15px*var(--read)); margin:22px 0 6px;}
+.fempty{color:var(--soft);}
+body.fediting .pcard{cursor:grab;}
+@media(max-width:760px){
+  .libwrap{flex-direction:column; padding:0 16px; gap:0;}
+  .folders{position:static; flex:none; width:100%; max-height:none; display:flex; flex-wrap:wrap; gap:4px;}
+  .folder{width:auto;}
+  .folder.all{border:0;}
+}
 
-main.lib{max-width:1180px; margin:0 auto; padding:10px 40px 120px;}
+main.lib{flex:1; min-width:0; padding:10px 0 60px;}
+.libfoot{max-width:1480px; margin:0 auto; padding:0 40px 40px;}
+@media(max-width:760px){ .libfoot{padding:0 16px 24px;} }
 .catgroup{margin:22px 0 8px;}
 .cathead{
   font-family:var(--font-display); font-weight:600; color:var(--accent2);
@@ -343,18 +379,163 @@ LIBRARY_JS = r"""
     });
   });
 
-  // 分类筛选：点 chip 高亮、显示对应 .catgroup、隐藏其余（「全部」显示所有）
-  var chips = document.querySelectorAll(".chip");
-  chips.forEach(function(chip){
-    chip.addEventListener("click", function(){
-      chips.forEach(function(c){ c.classList.remove("on"); });
-      chip.classList.add("on");
-      var cat = chip.getAttribute("data-cat");
-      document.querySelectorAll(".catgroup").forEach(function(g){
-        g.style.display = (cat === "__all__" || g.getAttribute("data-cat") === cat) ? "" : "none";
+  // ── 分类树（类似 Zotero 的文件夹）──────────────────────────────────────
+  // 数据：{tree:[{id,name,papers:[slug],children:[...]}]}，一篇论文只属于一个分类。
+  // 点分类 → 右侧显示它和子分类里的论文。编辑模式下可新建子分类 / 改名 / 删除；
+  // 拖论文到分类上 = 移过去；拖分类到分类上 = 变成它的子分类，拖到「全部论文」= 回到顶层。
+  // 保存：用 serve.py 打开时写回 folders.json；直接双击打开时只存在本浏览器里。
+  var treeBox = document.getElementById("ftree");
+  if (!treeBox) return;
+  var pool = document.getElementById("pool"), cardsBox = document.getElementById("cards");
+  var titleEl = document.getElementById("fTitle"), hint = document.getElementById("fHint");
+  var cardOf = {};
+  pool.querySelectorAll(".pcard").forEach(function(c){ cardOf[c.getAttribute("data-slug")] = c; });
+  var ALL = "__all__", NONE = "__none__";
+  var LS = function(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e) { return null; } };
+  var embedded = JSON.parse(document.getElementById("pv-folders").textContent).tree;
+  var tree = embedded, editing = false, current = LS("pv_folder") || "";
+  var closed = {}; try { closed = JSON.parse(LS("pv_fold_closed") || "{}"); } catch(e) {}
+  var served = /^https?:$/.test(location.protocol);
+
+  function walk(nodes, fn, parent){ nodes.forEach(function(n){ n.papers = n.papers || []; fn(n, parent, nodes); walk(n.children || (n.children = []), fn, n); }); }
+  function find(id){ var hit = null; walk(tree, function(n, p, list){ if (n.id === id) hit = {node:n, list:list}; }); return hit; }
+  function newId(){ return "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function unassigned(){
+    var seen = {}; walk(tree, function(n){ (n.papers || (n.papers = [])).forEach(function(s){ seen[s] = 1; }); });
+    return Object.keys(cardOf).filter(function(s){ return !seen[s]; });
+  }
+  function count(n){ var k = (n.papers || []).filter(function(s){ return cardOf[s]; }).length; (n.children || []).forEach(function(c){ k += count(c); }); return k; }
+  function contains(a, b){ if (a === b) return true; return (a.children || []).some(function(c){ return contains(c, b); }); }
+
+  function setHint(msg, bad){ hint.textContent = msg || ""; hint.classList.toggle("bad", !!bad); }
+  function save(){
+    var body = JSON.stringify({version:1, tree:tree}, null, 2);
+    LS("pv_folders_local", body);
+    if (!served) { setHint("只存在这个浏览器里。用 python serve.py 打开才会存进 folders.json。", true); return; }
+    fetch("api/folders", {method:"POST", headers:{"Content-Type":"application/json"}, body:body})
+      .then(function(r){ if (!r.ok) throw r.status; LS("pv_folders_local", ""); setHint("已保存"); })
+      .catch(function(){ setHint("保存失败：本地服务没开？已先存在浏览器里。", true); });
+  }
+
+  function row(id, name, n, depth, hasKids, node){
+    var r = document.createElement("div");
+    r.className = "folder" + (id === ALL ? " all" : "") + (id === current ? " on" : "");
+    r.style.paddingLeft = (8 + depth * 16) + "px";
+    r.setAttribute("data-id", id);
+    var tw = document.createElement("span"); tw.className = "twist";
+    tw.textContent = hasKids ? (closed[id] ? "▸" : "▾") : "";
+    tw.addEventListener("click", function(e){ e.stopPropagation(); closed[id] = !closed[id]; LS("pv_fold_closed", JSON.stringify(closed)); paintTree(); });
+    var nm = document.createElement("span"); nm.className = "fname"; nm.textContent = name;
+    var ct = document.createElement("span"); ct.className = "fcount"; ct.textContent = n;
+    r.appendChild(tw); r.appendChild(nm); r.appendChild(ct);
+    if (editing && node) {
+      [["＋", "新建子分类", function(){ var s = prompt("子分类名称"); if (s && s.trim()) { node.children.push({id:newId(), name:s.trim(), papers:[], children:[]}); closed[node.id] = false; changed(); } }],
+       ["✎", "改名", function(){ var s = prompt("新名称", node.name); if (s && s.trim()) { node.name = s.trim(); changed(); } }],
+       ["✕", "删除（论文和子分类并到上一级）", function(){ removeNode(node); }]].forEach(function(b){
+        var x = document.createElement("button"); x.className = "fop"; x.textContent = b[0]; x.title = b[1];
+        x.addEventListener("click", function(e){ e.stopPropagation(); b[2](); });
+        r.appendChild(x);
       });
-    });
+      r.draggable = true;
+      r.addEventListener("dragstart", function(e){ e.dataTransfer.setData("text/plain", "folder:" + id); });
+    }
+    r.addEventListener("click", function(){ open(id); window.scrollTo(0, 0); });
+    r.addEventListener("dragover", function(e){ if (id !== NONE) { e.preventDefault(); r.classList.add("drop"); } });
+    r.addEventListener("dragleave", function(){ r.classList.remove("drop"); });
+    r.addEventListener("drop", function(e){ e.preventDefault(); r.classList.remove("drop"); dropOn(id, e.dataTransfer.getData("text/plain")); });
+    return r;
+  }
+
+  function removeNode(node){
+    var hit = find(node.id); if (!hit) return;
+    if (!confirm("删除分类「" + node.name + "」？里面的论文和子分类会并到上一级。")) return;
+    var parent = null; walk(tree, function(n){ if (n.children.indexOf(node) >= 0) parent = n; });
+    var i = hit.list.indexOf(node);
+    hit.list.splice.apply(hit.list, [i, 1].concat(node.children));
+    if (parent) parent.papers = parent.papers.concat(node.papers);   // 顶层的论文变成「未归类」
+    if (current === node.id) current = parent ? parent.id : ALL;
+    changed();
+  }
+
+  function dropOn(id, data){
+    if (!data) return;
+    var kind = data.split(":")[0], val = data.slice(kind.length + 1);
+    if (kind === "paper") {
+      if (id === ALL) return;
+      walk(tree, function(n){ n.papers = n.papers.filter(function(s){ return s !== val; }); });
+      var t = find(id); if (t) t.node.papers.push(val);
+      changed(); return;
+    }
+    if (kind === "folder") {
+      var src = find(val); if (!src || val === id) return;
+      var dst = id === ALL ? null : find(id);
+      if (id !== ALL && (!dst || contains(src.node, dst.node))) return;   // 不能拖进自己的子分类
+      src.list.splice(src.list.indexOf(src.node), 1);
+      (dst ? dst.node.children : tree).push(src.node);
+      if (dst) closed[dst.node.id] = false;
+      changed();
+    }
+  }
+
+  function paintTree(){
+    treeBox.innerHTML = "";
+    treeBox.appendChild(row(ALL, "全部论文", Object.keys(cardOf).length, 0, false, null));
+    (function draw(nodes, depth){
+      nodes.forEach(function(n){
+        treeBox.appendChild(row(n.id, n.name, count(n), depth, n.children.length > 0, n));
+        if (!closed[n.id]) draw(n.children, depth + 1);
+      });
+    })(tree, 0);
+    var loose = unassigned();
+    if (loose.length) treeBox.appendChild(row(NONE, "未归类", loose.length, 0, false, null));
+    document.body.classList.toggle("fediting", editing);
+  }
+
+  function open(id){
+    if (id !== ALL && id !== NONE && !find(id)) id = tree.length ? tree[0].id : ALL;
+    current = id; LS("pv_folder", id);
+    Object.keys(cardOf).forEach(function(s){ pool.appendChild(cardOf[s]); });
+    cardsBox.innerHTML = "";
+    function put(slugs, box){ slugs.forEach(function(s){ if (cardOf[s]) box.appendChild(cardOf[s]); }); }
+    function section(n, path){
+      if (n.papers.some(function(s){ return cardOf[s]; }) && path) {
+        var h = document.createElement("h3"); h.className = "subhead"; h.textContent = path;
+        cardsBox.appendChild(h);
+      }
+      put(n.papers, cardsBox);
+      n.children.forEach(function(c){ section(c, (path ? path + " / " : "") + c.name); });
+    }
+    if (id === ALL) { titleEl.textContent = "全部论文"; tree.forEach(function(n){ section(n, n.name); }); put(unassigned(), cardsBox); }
+    else if (id === NONE) { titleEl.textContent = "未归类"; put(unassigned(), cardsBox); }
+    else { var n = find(id).node; titleEl.textContent = n.name; section(n, ""); }
+    if (!cardsBox.children.length) cardsBox.innerHTML = '<p class="fempty">这个分类还没有论文。' + (editing ? "把右边的论文拖到左边分类上即可移动。" : "") + "</p>";
+    paintTree();
+  }
+
+  function changed(){ save(); open(current); }
+
+  // 拖论文
+  Object.keys(cardOf).forEach(function(s){
+    cardOf[s].addEventListener("dragstart", function(e){ e.dataTransfer.setData("text/plain", "paper:" + s); });
   });
+  document.getElementById("fEdit").addEventListener("click", function(e){
+    editing = !editing; e.target.textContent = editing ? "完成" : "编辑";
+    if (editing) setHint("拖论文到分类上 = 移动；拖分类到分类上 = 变成子分类，拖到「全部论文」= 回顶层。");
+    else setHint("");
+    open(current);
+  });
+  document.getElementById("fAdd").addEventListener("click", function(){
+    var s = prompt("新分类名称"); if (!s || !s.trim()) return;
+    var n = {id:newId(), name:s.trim(), papers:[], children:[]}; tree.push(n); current = n.id; changed();
+  });
+
+  // 启动：优先读 folders.json（用 serve.py 打开时），其次是本浏览器里没存进文件的编辑，最后用生成时内嵌的树
+  function start(t){ if (Array.isArray(t)) tree = t; walk(tree, function(){}); open(current); }
+  var local = null; try { local = JSON.parse(LS("pv_folders_local") || "null"); } catch(e) {}
+  if (local && local.tree) { start(local.tree); if (served) save(); }
+  else if (served) fetch("folders.json", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ start(d && d.tree); }).catch(function(){ start(); });
+  else start();
 })();
 """
 
@@ -798,42 +979,63 @@ def render_l2(meta, modes, css_href, reader_href):
     }
 
 
-def render_l1(papers, css_href, library_href):
-    # papers: list of dict {slug, meta}
-    cats = []
+FOLDERS_FILE = "folders.json"
+
+
+def default_tree(papers):
+    """按 meta.category 生成一层分类树（第一次没有 folders.json 时用）。"""
+    cats = {}
     for p in papers:
         c = (p["meta"].get("category") or "未分类").strip()
-        if c not in cats:
-            cats.append(c)
-    cats.sort()
+        cats.setdefault(c, []).append(p["slug"])
+    return [{"id": "c%02d" % i, "name": c, "papers": cats[c], "children": []}
+            for i, c in enumerate(sorted(cats), 1)]
 
-    chips = '<button class="chip on" data-cat="__all__">全部</button>'
-    chips += "".join('<button class="chip" data-cat="%s">%s</button>' % (esc(c), esc(c)) for c in cats)
 
-    groups_html = ""
-    for c in cats:
-        cards = ""
-        for p in papers:
-            if (p["meta"].get("category") or "未分类").strip() != c:
-                continue
-            m = p["meta"]
-            href = "papers/%s/index.html" % p["slug"]
-            pmeta = " · ".join([x for x in [esc(m.get("authors")), esc(m.get("source"))] if x])
-            cards += ("""<div class="pcard">
+def load_tree(vault, papers):
+    """读 vault/folders.json（用户在首页编辑过的分类树）；没有就按 category 生成。"""
+    f = Path(vault) / FOLDERS_FILE
+    if f.exists():
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data.get("tree"), list):
+                return data["tree"]
+        except Exception as e:
+            print("  ! %s 解析失败，改用默认分类：%s" % (f, e), file=sys.stderr)
+    return default_tree(papers)
+
+
+def render_l1(papers, css_href, library_href, tree=None):
+    # papers: list of dict {slug, meta}；tree: 分类树（见 load_tree），树和交互都由 library.js 渲染
+    if tree is None:
+        tree = default_tree(papers)
+
+    cards = ""
+    for p in papers:
+        m = p["meta"]
+        href = "papers/%s/index.html" % p["slug"]
+        pmeta = " · ".join([x for x in [esc(m.get("authors")), esc(m.get("source"))] if x])
+        cards += ("""<div class="pcard" data-slug="%(slug)s" draggable="true">
   <div class="pcardtop">
     <span class="caret">▶</span>
     <div style="flex:1">
       <a class="ptitle" href="%(href)s">%(title)s</a>
-      <div class="pmeta">%(pmeta)s · <span class="cat">%(cat)s</span></div>
+      <div class="pmeta">%(pmeta)s</div>
     </div>
   </div>
   <div class="poverview">%(overview)s</div>
 </div>""") % {
-                "href": esc(href), "title": esc(m.get("title")),
-                "pmeta": pmeta, "cat": esc(c), "overview": esc(m.get("overview")),
-            }
-        groups_html += ('<section class="catgroup" data-cat="%s">'
-                        '<h3 class="cathead">%s</h3>%s</section>') % (esc(c), esc(c), cards)
+            "slug": esc(p["slug"]), "href": esc(href), "title": esc(m.get("title")),
+            "pmeta": pmeta, "overview": esc(m.get("overview")),
+        }
+    tree_json = json.dumps({"tree": tree}, ensure_ascii=False).replace("</", "<\\/")
+    chips = ('<div class="fbar"><span class="ftitle">分类</span>'
+             '<button class="fbtn" id="fAdd" title="新建分类">＋</button>'
+             '<button class="fbtn" id="fEdit" title="编辑分类树">编辑</button></div>'
+             '<div id="ftree"></div><div class="fhint" id="fHint"></div>')
+    groups_html = ('<h2 class="cathead" id="fTitle"></h2><div id="cards"></div>'
+                   '<div id="pool" hidden>%s</div>'
+                   '<script type="application/json" id="pv-folders">%s</script>') % (cards, tree_json)
 
     return """<!doctype html>
 <html lang="zh" data-theme="warm">
@@ -850,8 +1052,11 @@ def render_l1(papers, css_href, library_href):
   <span class="spacer"></span>
   <button class="iconbtn" id="themeBtn" title="主题">◐</button>
 </header>
-<div id="chips">%(chips)s</div>
+<div class="libwrap">
+<nav class="folders" aria-label="分类">%(chips)s</nav>
 <main class="lib">%(groups)s</main>
+</div>
+<footer class="libfoot"></footer>
 <script src="%(library)s"></script>
 </body>
 </html>""" % {
@@ -1024,8 +1229,12 @@ def build(vault: Path):
         if bad:
             pairing_bad[slug] = bad
 
-    l1 = render_l1(papers, "assets/app.css", "assets/library.js")
+    l1 = render_l1(papers, "assets/app.css", "assets/library.js", load_tree(vault, papers))
     (vault / "index.html").write_text(l1, encoding="utf-8")
+    # 本地服务：打开首页并把分类树的编辑保存回 folders.json
+    serve_src = Path(__file__).with_name("serve.py")
+    if serve_src.exists() and serve_src.resolve() != (vault / "serve.py").resolve():
+        (vault / "serve.py").write_text(serve_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print("OK  %d 篇论文 -> %s" % (len(papers), (vault / "index.html").resolve()))
     print("原文比例自检（目标 ±%d%%）:" % int(RATIO_TOL * 100))
@@ -1052,10 +1261,17 @@ def main():
     ap.add_argument("--strict", action="store_true",
                     help="比例超界或存在缺对照的块则以退出码 1 结束（供加工流程/CI 判定重跑）")
     args = ap.parse_args()
-    result = build(Path(args.vault).expanduser().resolve())
-    # 对照缺失始终视为硬错误；比例超界仅在 --strict 下视为错误
-    if result["pairing"] or (args.strict and result["ratio"]):
+    vault = Path(args.vault).expanduser().resolve()
+    result = build(vault)
+    # 对照缺失始终视为硬错误；--strict 下再跑三遍法质量门（validate.py），有不合格即退出码 1
+    if result["pairing"]:
         sys.exit(1)
+    if args.strict:
+        import subprocess
+        rc = subprocess.call([sys.executable, str(Path(__file__).with_name("validate.py")),
+                              "--vault", str(vault), "--all"])
+        if rc:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

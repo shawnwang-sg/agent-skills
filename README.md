@@ -31,7 +31,7 @@ agent-skills/
 | --- | --- |
 | [subtitle-cleanup](./subtitle-cleanup) | Process SRT/VTT/TXT/LRC subtitles. Mode A cleans into a paragraph 演讲文稿 `.docx`; Mode B merges fragmented timestamped lines into coherent sentences for English study. Loads matching `tools/subtitle-glossary/<domain>.md` when the user names a domain. |
 | [subtitles-to-paper](./subtitles-to-paper) | SRT/VTT/TXT 字幕（或链接里的字幕）→ 整理、校对、翻译，排成带稳定对话编号的中英分语言双栏论文式 PDF（LaTeX 模板 + render_paper.py）。 |
-| [paper-vault](./paper-vault) | 一篇论文（arxiv 链接 / PDF / 截图）→ 本地静态、翻页式、中英对照的三遍法阅读库（鸟瞰 / 理解 / 吃透）。 |
+| [paper-vault](./paper-vault) | 一篇论文（arxiv 链接 / PDF / 截图）→ 本地静态、翻页式、中英对照的三遍法阅读库（鸟瞰 / 理解 / 吃透）。按 Keshav 三遍法逐遍产出，`validate.py` 质量门逐字核验原文、检查图表覆盖、推演和分类问答；首页带可编辑分类树。 |
 | [quote-collection-publish](./quote-collection-publish) | 名言/摘抄 txt → 分类、去重、润色（附对照页）→ A4 双栏分页 PDF（一页一集）+ 每集 MP3 朗读（edge-tts）+ TXT + MOBI，四者分集分段一致。 |
 | [quote-wallpaper](./quote-wallpaper) | 名言 → 桌面文字壁纸，每条一张；右上角固定磨砂玻璃框（≤100 字横条框，101–300 字大框），字号自动取最大。 |
 | [jiayanchao-import](./jiayanchao-import) | 名言批量导入本地 growth-planner「嘉言钞」：宽松去重、长段拆短句、拆出处，写前自动备份。 |
