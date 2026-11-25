@@ -61,7 +61,8 @@ form{background:#fffaf2;border:1px solid #e0d5c4;border-radius:14px;padding:28px
 h1{font-size:18px;margin:0 0 6px}.tip{color:#6f6456;font-size:13px;margin:0 0 14px}input::placeholder{font-size:13px;letter-spacing:0}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid #e0d5c4;border-radius:10px}
 button{margin-top:14px;width:100%;padding:10px;font-size:16px;border:none;border-radius:10px;background:#A62B26;color:#fff}p{color:#A62B26;font-size:14px;min-height:20px;margin:10px 0 0}
 </style></head><body><form id="f"><h1>潜研堂 · 输入密码</h1><div class="tip">请输入 8 位密码（含大小写字母和特殊符号）</div><input id="pin" type="password" autocomplete="off" placeholder="8 位：大小写字母 + 特殊符号" autofocus><button>进入</button><p id="msg"></p></form>
-<script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();const r=await fetch('/api/lan-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:document.getElementById('pin').value})});
+<script>try{if(localStorage.getItem('pv_ui')==='en'){document.documentElement.lang='en';document.title='Lyceum Hall';document.querySelector('h1').textContent='Lyceum Hall · Password';document.querySelector('.tip').textContent='Enter your 8-character password (upper and lower case letters and symbols)';document.getElementById('pin').placeholder='8 characters: letters + symbols';document.querySelector('button').textContent='Enter';}}catch(e){}
+document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();const r=await fetch('/api/lan-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:document.getElementById('pin').value})});
 if(r.ok)location.reload();else document.getElementById('msg').textContent=(await r.json().catch(()=>({}))).error||'不对';};</script></body></html>"""
 
 
