@@ -1,4 +1,4 @@
-"""paper-vault 三遍法质量门（references/quality-gates.md 的可执行版本）。
+"""lyceum-hall 三遍法质量门（references/quality-gates.md 的可执行版本）。
 
 用法：
   python validate.py --vault <vault> <slug>            # 校验一篇，打印报告
@@ -279,7 +279,7 @@ def questions_of(folder):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="paper-vault 三遍法质量门")
+    ap = argparse.ArgumentParser(description="lyceum-hall 三遍法质量门")
     ap.add_argument("slugs", nargs="*")
     ap.add_argument("--vault", default=".")
     ap.add_argument("--all", action="store_true")
@@ -301,7 +301,7 @@ def main():
             obj = json.loads(p.read_text(encoding="utf-8"))
             obj["meta"]["reading_status"] = STATUS_OK if not fails else STATUS_BAD
             p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
-            audit = {"gate": "paper-vault three-pass quality gates v1", "pass": not fails, "fails": fails,
+            audit = {"gate": "lyceum-hall three-pass quality gates v1", "pass": not fails, "fails": fails,
                      "warns": warns, "metrics": {k: v for k, v in M.items() if k != "signature"},
                      "content_sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
             (f / "reading-audit.json").write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")

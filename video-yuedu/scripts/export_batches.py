@@ -1,4 +1,4 @@
-"""从学习台导出这个库里「已转成文字、还没润色」的条目，分批写成 JSON 给子任务处理。
+"""从博约阁导出这个库里「已转成文字、还没润色」的条目，分批写成 JSON 给子任务处理。
 
 用法：
   python export_batches.py --root D:\\douyin [--folders 厉害,爱好] [--size 30] [--limit N]

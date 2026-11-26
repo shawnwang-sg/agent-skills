@@ -1,4 +1,4 @@
-"""paper-vault 本地服务：打开潜研堂，保存首页分类树、章节概括和评分，并把划词收藏转给雅言堂。
+"""lyceum-hall 本地服务：打开潜研堂，保存首页分类树、章节概括和评分，并把划词收藏转给雅言堂。
 
 用法（在 vault 目录里）：python serve.py [--port 8791] [--no-browser] [--coach http://127.0.0.1:5310]
 默认只监听 127.0.0.1；vault 里有 lan.local.json（{"enabled": true, "pin": "...."}）时开局域网，别的设备要输密码。零依赖。
@@ -7,14 +7,14 @@
   GET  /api/folders        读首页分类树、收藏、在读
   POST /api/folders        首页分类树、收藏、在读 → folders.json（和 notes.json 一起放在个人 meta 文件夹）
   GET  /api/notes          读全部章节概括
-  POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/paper-vault/，可用环境变量 PAPER_VAULT_META 改）
+  POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/lyceum-hall/，可用环境变量 LYCEUM_HALL_META 改）
   POST /api/judge          保存概括并调用本机已登录的 claude CLI 打分（1–10）和点评 → notes.json
   GET  /api/learn?slug=    这篇论文的学习记录（没删的）
   POST /api/learn          选中即学：{slug, mode, section, text, context, again}；有存档且 again 不为真直接返回存档，
                            否则调引擎讲一次、追加一项 → learn.json（和 notes.json 同一个个人 meta 文件夹）
   POST /api/learn/delete   {id}：标记为已删（不真删）
   GET/POST /api/engine     读 / 改「学习」用的引擎（claude、codex）→ vault 里的 engine.local.json（不进 Git）
-  GET/POST /api/coach/...  转发给雅言堂（lang-coach）的 /api/collect 系列接口
+  GET/POST /api/coach/...  转发给雅言堂（calliope-hall）的 /api/collect 系列接口
 """
 import argparse
 import hashlib
@@ -35,9 +35,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-# 章节概括是个人数据：默认存进 self-meta 仓库的 paper-vault 文件夹（有的话），否则存在 vault 里
-_META = Path(os.environ.get("PAPER_VAULT_META") or Path.home() / "OneDrive" / "self-meta" / "paper-vault")
-META_DIR = _META if _META.parent.is_dir() else ROOT     # 个人数据：self-meta/paper-vault（没有 self-meta 时退回 vault 根目录）
+# 章节概括是个人数据：默认存进 self-meta 仓库的 lyceum-hall 文件夹（有的话），否则存在 vault 里
+_META = Path(os.environ.get("LYCEUM_HALL_META") or Path.home() / "OneDrive" / "self-meta" / "lyceum-hall")
+META_DIR = _META if _META.parent.is_dir() else ROOT     # 个人数据：self-meta/lyceum-hall（没有 self-meta 时退回 vault 根目录）
 NOTES = META_DIR / "notes.json"
 FOLDERS = META_DIR / "folders.json"
 META_SCHEMA = 1                                          # 个人数据格式版本：notes / folders 结构改了就 +1
@@ -85,7 +85,7 @@ def bump_meta():
                 else:
                     rows = len(d.get("favorites", [])) + len(d.get("reading", []))
                 tables[name] = {"rows": rows, "hash": "sha256:" + _h.sha256(b).hexdigest()}
-        meta = {"format": "paper-vault-meta", "version": 1, "schema": META_SCHEMA, "owner": owner_id() or old.get("owner"),
+        meta = {"format": "lyceum-hall-meta", "version": 1, "schema": META_SCHEMA, "owner": owner_id() or old.get("owner"),
                 "revision": int(old.get("revision") or 0) + 1, "base": int(old.get("revision") or 0),
                 "device": _s.gethostname(), "exportedAt": time.strftime("%Y-%m-%dT%H:%M:%S"), "tables": tables}
         tmp = f.with_suffix(".json.tmp")
@@ -130,7 +130,7 @@ def load_lan():
 
 
 LAN = load_lan()
-LAN_TOKEN = hashlib.sha256(("paper-vault:%s" % LAN["pin"]).encode()).hexdigest() if LAN else None
+LAN_TOKEN = hashlib.sha256(("lyceum-hall:%s" % LAN["pin"]).encode()).hexdigest() if LAN else None
 _fails = {}
 LOGIN_PAGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>潜研堂</title><style>
@@ -281,7 +281,7 @@ LEARN = META_DIR / "learn.json"
 LEARN_MAX = 500          # 选中超过 500 个字符不讲
 LEARN_CTX = 900          # 上下文以选中为中心截到约 900 个字符
 LEARN_TIMEOUT = 60
-PROMPT_DIRS = [ROOT / "plugins" / "paper-vault" / "skills" / "paper-explain" / "prompts",
+PROMPT_DIRS = [ROOT / "plugins" / "lyceum-hall" / "skills" / "paper-explain" / "prompts",
                Path(__file__).resolve().parent.parent / "paper-explain" / "prompts"]   # vault 里 / skill 仓库里
 _learn_lock = threading.Lock()
 _busy_lock = threading.Lock()
@@ -386,9 +386,9 @@ FAKE_CALLS = []          # 假引擎被调用的记录（测试看它判断有�
 
 
 def engine_fake(system, user, timeout):
-    """只给测试用：环境变量 PAPER_VAULT_FAKE_ENGINE=1 时才有，界面上不出现。PAPER_VAULT_FAKE_DELAY 可设秒数。"""
+    """只给测试用：环境变量 LYCEUM_HALL_FAKE_ENGINE=1 时才有，界面上不出现。LYCEUM_HALL_FAKE_DELAY 可设秒数。"""
     FAKE_CALLS.append(user)
-    time.sleep(float(os.environ.get("PAPER_VAULT_FAKE_DELAY") or 0))
+    time.sleep(float(os.environ.get("LYCEUM_HALL_FAKE_DELAY") or 0))
     sel = user.rsplit("选中：", 1)[-1][:40]
     n = len(FAKE_CALLS)
     if "五行" in system:
@@ -401,7 +401,7 @@ def engine_fake(system, user, timeout):
 
 ENGINES = {"claude": (engine_claude, lambda: bool(shutil.which("claude"))),
            "codex": (engine_codex, lambda: bool(shutil.which("codex"))),
-           "fake": (engine_fake, lambda: os.environ.get("PAPER_VAULT_FAKE_ENGINE") == "1")}
+           "fake": (engine_fake, lambda: os.environ.get("LYCEUM_HALL_FAKE_ENGINE") == "1")}
 HIDDEN_ENGINES = ("fake",)
 
 
@@ -764,7 +764,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="paper-vault 本地服务")
+    ap = argparse.ArgumentParser(description="lyceum-hall 本地服务")
     ap.add_argument("--port", type=int, default=8791)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--coach", default=COACH, help="雅言堂的地址（默认 %s）" % COACH)
@@ -772,7 +772,7 @@ def main():
     Handler.coach = a.coach.rstrip("/")
     srv = ThreadingHTTPServer(("0.0.0.0" if LAN else "127.0.0.1", a.port), Handler)
     url = "http://127.0.0.1:%d/index.html" % a.port
-    print("paper-vault: %s  (Ctrl+C 退出)" % url)
+    print("lyceum-hall: %s  (Ctrl+C 退出)" % url)
     if LAN:
         for ip in lan_addresses():
             print("局域网：http://%s:%d/  （别的设备第一次打开要输密码）" % (ip, a.port))
