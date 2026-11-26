@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""paper-vault 生成器引擎。
+"""lyceum-hall 生成器引擎。
 
 把 <vault>/papers/*/paper.json 渲染成本地静态、翻页式、中英对照的三遍法阅读库：
   L1 论文库首页 index.html
@@ -24,7 +24,7 @@ from pathlib import Path
 # §6.1 主题 + 全局样式（app.css）
 # ─────────────────────────────────────────────────────────────────────────────
 APP_CSS = r"""
-/* paper-vault app.css —— 由 build.py 写出，勿手改 */
+/* lyceum-hall app.css —— 由 build.py 写出，勿手改 */
 
 /* ── 三套主题（html[data-theme] 切换） ── */
 html[data-theme="warm"]{
@@ -475,7 +475,7 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="22" fill="#A62B26"/><g fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 31 Q35 25 50 33 Q65 25 80 31 V73 Q65 67 50 75 Q35 67 20 73 Z"/><path d="M50 33 V75"/></g></svg>'
 
 LIBRARY_JS = r"""
-/* paper-vault library.js —— L1 行为 */
+/* lyceum-hall library.js —— L1 行为 */
 (function(){
   // ── 界面语言（中 / EN）：存在 localStorage.pv_ui，切换后刷新页面 ──
   var UI = (function(){ try { return localStorage.getItem("pv_ui") === "en" ? "en" : "zh"; } catch(e) { return "zh"; } })();
@@ -894,7 +894,7 @@ LIBRARY_JS = r"""
 # §6.4 L2/L3 行为（reader.js）
 # ─────────────────────────────────────────────────────────────────────────────
 READER_JS = r"""
-/* paper-vault reader.js —— L2 翻页阅读器行为 */
+/* lyceum-hall reader.js —— L2 翻页阅读器行为 */
 (function(){
   // ── 界面语言（中 / EN）：存在 localStorage.pv_ui，切换后刷新页面 ──
   var UI = (function(){ try { return localStorage.getItem("pv_ui") === "en" ? "en" : "zh"; } catch(e) { return "zh"; } })();
@@ -1218,7 +1218,7 @@ READER_JS = r"""
     });
   }
 
-  // ── 划词收藏 → 雅言堂（serve.py 转发到 lang-coach 的 /api/collect）──
+  // ── 划词收藏 → 雅言堂（serve.py 转发到 calliope-hall 的 /api/collect）──
   var pick = null;
   function hidePick(){ if (pick) { pick.remove(); pick = null; } }
   function toast(msg){
@@ -1235,7 +1235,7 @@ READER_JS = r"""
     var page = document.querySelector(".mode.active .page.active"), sec = page ? (page.getAttribute("data-toc-en") || "") : "";
     fetch("../../api/coach/collect", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({kind:kind, text:text, sentence:sentence,
-        source:{app:"paper-vault", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
+        source:{app:"lyceum-hall", slug:SLUG, title:(document.querySelector(".tb-title") || {}).textContent || document.title, section:sec, url:location.href}})})
       .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
       .then(function(d){
         if (kind === "word") { var w = d.word || {}; toast(T("已收进雅言堂 · 学术英语：", "Saved to Calliope Hall · academic words: ") + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
@@ -1651,7 +1651,7 @@ def render_l2(meta, modes, css_href, reader_href):
 <html lang="zh" data-theme="warm">
 <head>
 <meta charset="utf-8">
-<script src="%(lock)s" data-key="paper-vault" data-api="/api/lock"></script>
+<script src="%(lock)s" data-key="lyceum-hall" data-api="/api/lock"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%(title)s</title>
 %(fonts)s
@@ -1697,9 +1697,9 @@ FOLDERS_FILE = "folders.json"
 
 
 def folders_path(vault):
-    """收藏、在读、分类树：优先个人 meta 文件夹（PAPER_VAULT_META 或 ~/OneDrive/self-meta/paper-vault），旧版在 vault 根目录。"""
+    """收藏、在读、分类树：优先个人 meta 文件夹（LYCEUM_HALL_META 或 ~/OneDrive/self-meta/lyceum-hall），旧版在 vault 根目录。"""
     import os
-    meta = Path(os.environ.get("PAPER_VAULT_META") or Path.home() / "OneDrive" / "self-meta" / "paper-vault") / FOLDERS_FILE
+    meta = Path(os.environ.get("LYCEUM_HALL_META") or Path.home() / "OneDrive" / "self-meta" / "lyceum-hall") / FOLDERS_FILE
     return meta if meta.exists() else Path(vault) / FOLDERS_FILE
 
 
@@ -1813,7 +1813,7 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <html lang="zh" data-theme="warm">
 <head>
 <meta charset="utf-8">
-<script src="%(lock)s" data-key="paper-vault" data-api="/api/lock"></script>
+<script src="%(lock)s" data-key="lyceum-hall" data-api="/api/lock"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>潜研堂 · Lyceum Hall</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -2034,7 +2034,7 @@ def build(vault: Path):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="paper-vault 阅读库生成器")
+    ap = argparse.ArgumentParser(description="lyceum-hall 阅读库生成器")
     ap.add_argument("--vault", default=".", help="vault 目录（默认当前目录）")
     ap.add_argument("--strict", action="store_true",
                     help="比例超界或存在缺对照的块则以退出码 1 结束（供加工流程/CI 判定重跑）")

@@ -13,16 +13,16 @@
   todo/ done/        待处理批次、润色结果
   moves.json         本地挪动记录（relocate.py）
 
-学习台（转写工具）的数据库里可能同时有好几个库的条目，所以一律按 local_path 是否在根目录下来区分。
+博约阁（转写工具）的数据库里可能同时有好几个库的条目，所以一律按 local_path 是否在根目录下来区分。
 """
 import json, os
 from pathlib import Path
 
-DEFAULT_APP = r"F:\douyin-fav-study"
+DEFAULT_APP = r"F:\hive-pavilion"
 DEFAULT = {
     "title": "",            # 页面标题，空 = 「阅读 · <根目录名>」
     "subtitle": "视频转写稿 · 去口水词、改错字、不改原话",
-    "app": DEFAULT_APP,     # 转写用的学习台（需要有「导入本地文件夹 · 只转文字」功能）
+    "app": DEFAULT_APP,     # 转写用的博约阁（需要有「导入本地文件夹 · 只转文字」功能）
     "app_url": "http://127.0.0.1:8765",
     "tabs": [],             # 顶部 tab = 分类文件夹名，按这个顺序
     "tab_desc": {},         # 每个 tab 的主题一句话，给子任务判断放没放错
@@ -79,7 +79,7 @@ class Lib:
         return c
 
     def items(self, cols="*", where="1=1"):
-        """学习台里属于这个库的条目（source='local' 且文件在根目录下）。"""
+        """博约阁里属于这个库的条目（source='local' 且文件在根目录下）。"""
         c = self.connect()
         rows = [dict(r) for r in c.execute(f"select {cols}, local_path as _lp from items where source='local' and {where}")
                 if self.owns(r["_lp"])]

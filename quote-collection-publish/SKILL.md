@@ -1,6 +1,6 @@
 ---
 name: quote-collection-publish
-description: 把名言/金句/摘抄 txt（如 D:\douyin\厉害文字集锦.txt）整理成一套「集锦出版物」：分类+小主题排序、拆条、去重、润色（附对照页）、A4 双栏分页 HTML/PDF（一页 = 一集）、每集一个 MP3 朗读音频（edge-tts 云希）、TXT 定稿、MOBI 电子书、单独打印页，最后汇总到桌面。触发词：「整理成集锦」「集锦出版」「做成 PDF/MP3/电子书」「名言做成音频」「一页一集」「双栏 PDF」「做 mobi」「厉害文字集锦」，或用户丢来一个名言/摘抄 txt 让你分类、润色、出 PDF、出音频、出电子书——即使只要其中一样（比如只要 MP3 或只要 PDF），也用这个 skill，因为几样产物的分集和分段必须一致。文字壁纸用 quote-wallpaper，导入 growth-planner 嘉言钞用 jiayanchao-import。
+description: 把名言/金句/摘抄 txt（如 D:\douyin\厉害文字集锦.txt）整理成一套「集锦出版物」：分类+小主题排序、拆条、去重、润色（附对照页）、A4 双栏分页 HTML/PDF（一页 = 一集）、每集一个 MP3 朗读音频（edge-tts 云希）、TXT 定稿、MOBI 电子书、单独打印页，最后汇总到桌面。触发词：「整理成集锦」「集锦出版」「做成 PDF/MP3/电子书」「名言做成音频」「一页一集」「双栏 PDF」「做 mobi」「厉害文字集锦」，或用户丢来一个名言/摘抄 txt 让你分类、润色、出 PDF、出音频、出电子书——即使只要其中一样（比如只要 MP3 或只要 PDF），也用这个 skill，因为几样产物的分集和分段必须一致。文字壁纸用 quote-wallpaper，导入拙勤堂嘉言钞用 jiayanchao-import。
 ---
 
 # 名言集锦出版

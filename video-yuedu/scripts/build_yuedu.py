@@ -1,7 +1,7 @@
 """把一个库 done/ 里所有润色结果生成阅读页（默认 <库根目录>/yuedu.html）。
 
 结构：顶部 tab = 分类文件夹（config.json 的 tabs），tab 里按「大类 → 小主题」分组，左侧导航、搜索、
-连播 / 洗牌连播；另有「待处理清单」tab：没信息量的（含学习台里因无对白跳过的）、疑似归错分类的；
+连播 / 洗牌连播；另有「待处理清单」tab：没信息量的（含博约阁里因无对白跳过的）、疑似归错分类的；
 「质检」tab：改动比例和存疑统计。
 用法：python build_yuedu.py --root D:\\douyin [--out 另存路径]
 子任务自检改动比例时只 import change_pct，不需要 --root。
@@ -161,7 +161,7 @@ def main():
             move.append(x)
         else:
             low.append(x)
-    # 学习台里因为「几乎没有说话内容」而跳过的，也算没信息量（画面为主或纯音乐）
+    # 博约阁里因为「几乎没有说话内容」而跳过的，也算没信息量（画面为主或纯音乐）
     for i, m in meta.items():
         if m["status"] == "skipped" and i not in res and "说话内容" in (m.get("reason") or "") and folder_of(m["local_path"]) in lib.all_tabs():
             low.append({"id": i, "verdict": "low_info", "low_info_type": "画面为主", "reason": "转写时几乎没听到说话（画面、字幕或纯音乐为主）",

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""把名言导入 growth-planner 的嘉言钞（个人 meta 里 data.json 的 quotes 数组），自动去重、拆长段、拆出处。
+"""把名言导入拙勤堂的嘉言钞（个人 meta 里 data.json 的 quotes 数组），自动去重、拆长段、拆出处。
 
 用法：
-  python import_quotes.py <输入> --source 厉害文字集锦 [--data <个人 meta>\\data.json，默认读 growth-planner 的绑定>] [--dry-run]
+  python import_quotes.py <输入> --source 厉害文字集锦 [--data <个人 meta>\\data.json，默认读拙勤堂的绑定>] [--dry-run]
 输入可以是：quote-collection-publish 的 pages.json（含附录 extract）、JSON 字符串列表、或空行分隔的 txt。
 
 规则：
@@ -19,12 +19,12 @@ ap = argparse.ArgumentParser()
 ap.add_argument("input")
 ap.add_argument("--source", required=True, help="没有出处时填的来源名，一般是集锦标题")
 def _bound_data():
-    # growth-planner 绑定的个人 meta 文件夹（现在是 self-meta 仓库里的 growth-planner/）
+    # 拙勤堂绑定的个人 meta 文件夹（self-meta 仓库里的 tortoise-hall/）
     try:
-        with open(r"C:\Users\Shugu\growth-planner\storage.local.json.meta.json", encoding="utf-8") as f:
+        with open(r"C:\Users\Shugu\tortoise-hall\storage.local.json.meta.json", encoding="utf-8") as f:
             return os.path.join(json.load(f)["directory"], "data.json")
     except Exception:
-        return r"C:\Users\Shugu\OneDrive\self-meta\growth-planner\data.json"
+        return r"C:\Users\Shugu\OneDrive\self-meta\tortoise-hall\data.json"
 ap.add_argument("--data", default=_bound_data())
 ap.add_argument("--max", type=int, default=120)
 ap.add_argument("--dry-run", action="store_true", help="只统计，不写文件")

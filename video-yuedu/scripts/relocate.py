@@ -4,8 +4,8 @@
 挪哪些：
 - verdict=move 且 move_to 是这个库的 tab（config 的 tabs）；move_to 不是 tab（如「其他」）的不挪，留在待处理清单。
 - verdict=keep 且带 tab 字段、但文件还不在那个 tab 文件夹里（平铺的库：润色时顺便定 tab，再挪进去）。
-同步修改：学习台数据库 items.local_path；学习台 data/downloaded.json 里的旧路径；data/relocated.json 记新位置
-（douyin-fav-study 的 downloaded_path 认这个记录，同步收藏夹时不会把文件再复制回原分类）。
+同步修改：博约阁数据库 items.local_path；博约阁 data/downloaded.json 里的旧路径；data/relocated.json 记新位置
+（hive-pavilion 的 downloaded_path 认这个记录，同步收藏夹时不会把文件再复制回原分类）。
 每笔挪动记到 <库>/_yuedu/moves.json，--undo 全部撤回。目标里已有同名文件时加「 (2)」，不覆盖。
 
 用法：python relocate.py --root D:\\douyin [--dry-run] [--export] [--undo]

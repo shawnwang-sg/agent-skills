@@ -2,7 +2,7 @@
 
 用法：
   python init_lib.py --root D:\\xiaohongshu --title "阅读 · 小红书收藏" [--tabs 职场,AI,美食] [--link-label 小红书原链接]
-                     [--app C:\\Users\\Shugu\\douyin-fav-study] [--app-url http://127.0.0.1:8765] [--sample 40]
+                     [--app F:\\hive-pavilion] [--app-url http://127.0.0.1:8765] [--sample 40]
 不给 --tabs 时：用根目录下「直接含视频文件」的子文件夹当 tab（图文笔记文件夹、_ 开头的、exclude 里的不算）。
 平铺的库（视频都直接放在根目录）没有分类文件夹：先看抽样标题，再用 --tabs 定几个 tab，润色时给每条定 tab，
 relocate.py 会把文件挪进对应的子文件夹。已有 config 时只更新给出的参数。
@@ -67,7 +67,7 @@ def main():
     lib.save()
     lib = Lib(a.root)
     print(f"配置：{lib.work / 'config.json'}")
-    print(f"标题：{lib.title}；学习台：{lib.app}；tabs：{lib.tabs or '（还没定）'}；根目录下未分类的算「{lib.inbox}」")
+    print(f"标题：{lib.title}；博约阁：{lib.app}；tabs：{lib.tabs or '（还没定）'}；根目录下未分类的算「{lib.inbox}」")
     random.seed(1)
     for k in sorted(found, key=lambda k: -len(found[k])):
         name = k or f"（根目录，算「{lib.inbox}」）"
