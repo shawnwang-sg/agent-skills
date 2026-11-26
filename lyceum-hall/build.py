@@ -467,6 +467,19 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 }
 .toast{position:fixed; z-index:60; left:50%; bottom:70px; transform:translateX(-50%); max-width:min(560px,90vw);
   background:var(--ink); color:var(--page); padding:8px 16px; border-radius:10px; font:13px/1.6 var(--font-zh); box-shadow:0 4px 14px rgba(0,0,0,.25);}
+
+/* 回知行书院的小链接：次要文字，不抢工具名；窄屏缩成「‹ 书院」 */
+.portal-link{color:var(--soft); font-size:13px; white-space:nowrap; text-decoration:none; flex:0 0 auto;}
+.portal-link:hover{color:var(--accent); text-decoration:underline;}
+.portal-link .pl-short{display:none;}
+.l1 header.libhead .portal-link{align-self:center;}
+.toc .portal-link{display:block; padding:0 0 10px; font-size:13px; color:var(--soft);}
+.toc .portal-link:hover{background:transparent;}
+@media (max-width:520px){
+  .portal-link .pl-full{display:none;}
+  .portal-link .pl-short{display:inline;}
+  .l1 header.libhead{padding-left:16px; padding-right:16px; gap:10px;}
+}
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -505,6 +518,18 @@ LIBRARY_JS = r"""
     b.addEventListener("click", function(){ try { localStorage.setItem("pv_ui", UI === "en" ? "zh" : "en"); } catch(e) {} location.reload(); });
     var theme = host.querySelector("#themeBtn");
     if (theme) host.insertBefore(b, theme); else host.appendChild(b);
+    // 回知行书院（总入口，同一台机器的 8700 端口；端口和开关在 lan.local.json 的 portal，由 /api/engine 带回；直接双击打开静态页时不显示）
+    if (host.classList.contains("libhead") && /^https?:$/.test(location.protocol)) {
+      fetch("api/engine", {cache: "no-store"}).then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
+        if (!d || !d.portal) return;
+        var a = document.createElement("a");
+        a.className = "portal-link"; a.href = "http://" + location.hostname + ":" + d.portal + "/";
+        a.innerHTML = UI === "en" ? '‹ <span class="pl-full">Praxis Academy</span><span class="pl-short">Academy</span>'
+                                  : '‹ <span class="pl-full">知行书院</span><span class="pl-short">书院</span>';
+        a.title = UI === "en" ? "Back to Praxis Academy" : "回知行书院首页";
+        host.insertBefore(a, host.firstChild);
+      }).catch(function(){});
+    }
     // 离开就锁（lock.js；没设密码时开关自己藏起来）：放在顶栏右侧
     if (window.LockOnLeave && host.classList.contains("libhead")) {
       var lk = LockOnLeave.toggle("lol-toggle");
@@ -1007,6 +1032,22 @@ READER_JS = r"""
     });
     var cb = tocEl.querySelector(".toc-collapse");
     if (cb) cb.addEventListener("click", function(){ setToc(true); });
+    addPortal();
+  }
+
+  // 回知行书院：放在目录面板顶部（顶栏已满）。端口和开关在 lan.local.json 的 portal，由 /api/engine 带回；静态页直接打开时不显示
+  var portalPort = null;
+  function addPortal(){
+    if (!portalPort || !tocEl || tocEl.querySelector(".portal-link")) return;
+    var a = E("a", "portal-link"); a.href = "http://" + location.hostname + ":" + portalPort + "/";
+    a.title = T("回知行书院首页", "Back to Praxis Academy");
+    a.textContent = T("‹ 知行书院", "‹ Praxis Academy");
+    tocEl.insertBefore(a, tocEl.firstChild);
+  }
+  if (/^https?:$/.test(location.protocol)) {
+    fetch("../../api/engine", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
+      if (d && d.portal) { portalPort = d.portal; addPortal(); }
+    }).catch(function(){});
   }
 
   // 目录收起/展开（完全收起 + 悬浮按钮）
@@ -1239,7 +1280,7 @@ READER_JS = r"""
       .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); })
       .then(function(d){
         if (kind === "word") { var w = d.word || {}; toast(T("已收进雅言堂 · 学术英语：", "Saved to Calliope Hall · academic words: ") + (w.display || text) + (w.ipa ? "  /" + w.ipa.replace(/^\/|\/$/g, "") + "/" : "") + (w.zh ? "  " + w.zh : "")); }
-        else toast(T("已收进雅言堂的难句本，打开雅言堂可看主干拆解。", "Saved to Calliope Hall's hard sentences; open it there for a breakdown."));
+        else toast(T("已收进雅言堂的阅读句型，打开雅言堂可看主干拆解。", "Saved to Calliope Hall's reading patterns; open it there for a breakdown."));
       })
       .catch(function(e){ toast(T("没收成：", "Not saved: ") + e.message); });
   }

@@ -108,7 +108,7 @@ JUDGE_MODEL = "sonnet"
 _notes_lock = threading.Lock()
 
 # ── 局域网访问 ──────────────────────────────────────────────────────────────
-# vault 根目录的 lan.local.json：{"enabled": true, "pin": "...."}（不进 Git）。
+# vault 根目录的 lan.local.json：{"enabled": true, "pin": "....", "portal": 8700}（不进 Git；portal 可省，false 关掉书院链接）。
 # 开了以后监听 0.0.0.0；本机直接用，别的设备第一次要输密码，之后记住一年；连错 8 次锁 10 分钟。
 LAN_FILE = ROOT / "lan.local.json"
 LAN_COOKIE = "pv_pin"
@@ -127,6 +127,24 @@ def load_lan():
         return d if d.get("enabled") and str(d.get("pin") or "") else None
     except Exception:
         return None
+
+
+def portal_port():
+    """页面顶栏「‹ 知行书院」链接的端口；None 表示不显示。读 lan.local.json 的 portal 字段（不进 Git）：
+    缺省 = 开、端口 8700；false = 关；数字或 {"port": 8701} = 改端口；{"enabled": false} 也是关。每次现读，改了不用重启。"""
+    try:
+        v = json.loads(LAN_FILE.read_text(encoding="utf-8")).get("portal", True)
+    except Exception:
+        v = True
+    if isinstance(v, dict):
+        if v.get("enabled", True) is False:
+            return None
+        v = v.get("port", True)
+    if v is False or v is None:
+        return None
+    if isinstance(v, int) and not isinstance(v, bool) and 0 < v < 65536:
+        return v
+    return 8700
 
 
 LAN = load_lan()
@@ -651,7 +669,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(400, {"error": "bad slug"})
             return self.reply(200, {"items": learn_list(slug)})
         if self.path.split("?")[0] == "/api/engine":
-            return self.reply(200, {"engine": current_engine(), "options": engine_options()})
+            return self.reply(200, {"engine": current_engine(), "options": engine_options(), "portal": portal_port()})
         if self.path.split("?")[0] in ("/api/folders", "/folders.json"):
             try:
                 return self.reply(200, json.loads(FOLDERS.read_text(encoding="utf-8")))
