@@ -131,6 +131,7 @@ body.lang-zh .zh{color:var(--ink);}           /* zh-only 时把 zh 提为主色 
 }
 .pcard .readtag:hover{border-color:var(--accent2); color:var(--accent2);}
 .pcard .readtag.on{background:var(--accent2); border-color:var(--accent2); color:#fff;}
+@media(min-width:761px) and (max-width:1280px){ .libsearch{width:min(200px, 22vw);} }   /* 给顶栏的「离开就锁」让出位置，别折行 */
 @media(max-width:760px){ .libsearch{width:100%; order:5;} }
 .folder.all{font-weight:600; border-bottom:1px solid var(--line); border-radius:8px 8px 0 0; margin-bottom:4px;}
 .fhint{color:var(--soft); font-size:12px; padding:6px 8px 2px; line-height:1.6;}
@@ -167,6 +168,10 @@ body.fview-venue .fbar .fbtn, body.fview-author .fbar .fbtn{display:none;}
   color:var(--ink); text-decoration:none; background:var(--paper);}
 .vcard .vlinks a:hover{border-color:var(--accent);}
 .uibtn{font-size:12px; font-weight:600; letter-spacing:.02em; min-width:34px;}
+/* 顶栏的「离开就锁」开关（lock.js 生成；没设密码时它自己藏起来） */
+.lol-toggle{display:inline-flex; align-items:center; gap:4px; font-size:13px; color:var(--soft); cursor:pointer; padding:8px 4px; white-space:nowrap; align-self:center;}
+.lol-toggle[hidden]{display:none;}
+.lol-toggle input{accent-color:var(--accent); margin:0;}
 .libmotto{font-family:var(--font-zh); color:var(--accent); font-size:14px; letter-spacing:.04em;}
 @media(max-width:760px){ .libmotto{display:none;} }
 @media(max-width:760px){
@@ -500,6 +505,12 @@ LIBRARY_JS = r"""
     b.addEventListener("click", function(){ try { localStorage.setItem("pv_ui", UI === "en" ? "zh" : "en"); } catch(e) {} location.reload(); });
     var theme = host.querySelector("#themeBtn");
     if (theme) host.insertBefore(b, theme); else host.appendChild(b);
+    // 离开就锁（lock.js；没设密码时开关自己藏起来）：放在顶栏右侧
+    if (window.LockOnLeave && host.classList.contains("libhead")) {
+      var lk = LockOnLeave.toggle("lol-toggle");
+      if (UI === "en") { lk.lastChild.nodeValue = " Lock on leave"; lk.title = "Lock after 3 s away; password needed to come back (per device)"; }
+      host.insertBefore(lk, b);
+    }
   })();
 
   // 右下角「i」：打开本库的规划页 roadmap.html（以后要做的事）
@@ -1242,7 +1253,7 @@ READER_JS = r"""
     var rect = sel.getRangeAt(0).getBoundingClientRect(), words = text.split(" ").length;
     pick = E("div", "pick");
     var sentence = sentenceOf(host.textContent, text);
-    if (LEARN_ON) { var bl = E("button", "pk-learn", T("学习", "Learn")); bl.addEventListener("click", function(){ learnSel(text, host); }); pick.appendChild(bl); }
+    if (LEARN_ON) { var nth = nthOf(sel.getRangeAt(0), host, text), bl = E("button", "pk-learn", T("学习", "Learn")); bl.addEventListener("click", function(){ learnSel(text, host, nth); }); pick.appendChild(bl); }
     if (words <= 4) { var bw = E("button", "", T("＋ 收藏词", "＋ Save word")); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
     var bsn = E("button", "", T("＋ 收藏句", "＋ Save sentence")); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
     document.body.appendChild(pick);
@@ -1280,8 +1291,32 @@ READER_JS = r"""
     }
     return {s: s, map: map};
   }
-  function markIn(el, text, id){
-    var tm = textMap(el), i = tm.s.indexOf(text); if (i < 0) return false;
+  function occ(s, text){
+    // 不重叠地找出 text 在 s 里每一处的起点
+    var r = [], i = s.indexOf(text);
+    while (i >= 0) { r.push(i); i = s.indexOf(text, i + text.length); }
+    return r;
+  }
+  function sectionEls(page, mode){
+    // 同一遍、同一小节的英文原文块（按文档顺序）
+    var t = secTitle(page);
+    return Array.prototype.filter.call(document.querySelectorAll(".mode .page .en"), function(el){
+      return el.closest(".mode").getAttribute("data-mode") === mode && secTitle(el.closest(".page")) === t;
+    });
+  }
+  function nthOf(range, host, text){
+    // 选中的是这一小节里这段文字的第几处（从 0 起）；算不出来返回 null
+    var page = host.closest(".page"), mode = page.closest(".mode").getAttribute("data-mode"), els = sectionEls(page, mode), n = 0;
+    for (var e = 0; e < els.length; e++) {
+      var tm = textMap(els[e]), ix = occ(tm.s, text);
+      if (els[e] !== host) { n += ix.length; continue; }
+      for (var k = 0; k < ix.length; k++) { var p = tm.map[ix[k]]; if (range.comparePoint(p[0], p[1]) >= 0) return n + k; }
+      return null;
+    }
+    return null;
+  }
+  function markIn(el, text, id, k){
+    var tm = textMap(el), i = occ(tm.s, text)[k || 0]; if (i === undefined) return false;
     var a = tm.map[i], b = tm.map[i + text.length - 1], segs = [], on = false, n;
     var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     while ((n = w.nextNode())) {
@@ -1302,6 +1337,13 @@ READER_JS = r"""
     var all = Array.prototype.slice.call(document.querySelectorAll(".mode .page .en"));
     function inMode(el){ return el.closest(".mode").getAttribute("data-mode") === it.mode; }
     var tiers = [all.filter(function(el){ return inMode(el) && secTitle(el.closest(".page")) === it.section; }), all.filter(inMode), all];
+    // 记了 nth：先在同一小节里数到第 nth 处，画在那一处；数不到（页面重做过）就退回第一处；没有 nth 的旧记录就是第一处
+    var want = (typeof it.nth === "number" && it.nth > 0) ? it.nth : 0;
+    if (want) for (var q = 0; q < tiers[0].length; q++) {
+      var c = occ(textMap(tiers[0][q]).s, it.text).length;
+      if (want < c) { markIn(tiers[0][q], it.text, it.id, want); return; }
+      want -= c;
+    }
     for (var t = 0; t < tiers.length; t++)
       for (var k = 0; k < tiers[t].length; k++) if (markIn(tiers[t][k], it.text, it.id)) return;
   }
@@ -1367,20 +1409,21 @@ READER_JS = r"""
     });
     acts.appendChild(ba); acts.appendChild(bd);
   }
-  function ask(text, host, it, again){
+  function ask(text, host, it, again, nth){
     var page = host ? host.closest(".page") : null;
     var body = it ? {slug:SLUG, mode:it.mode, section:it.section, text:text, context:"", again:true}
                   : {slug:SLUG, mode:page.closest(".mode").getAttribute("data-mode"), section:secTitle(page), text:text, context:host.textContent, again:!!again};
+    if (!it && typeof nth === "number") body.nth = nth;
     if (it) { var ctxEl = document.querySelector(lrnSel(it.id)); if (ctxEl) body.context = ctxEl.closest(".en").textContent; }
     renderCard(text, it, T("正在讲…", "Explaining…"));
     jpost("../../api/learn", body).then(function(d){
       LEARNED[d.item.id] = d.item; underline(d.item); renderCard(text, d.item);
     }).catch(function(e){ renderCard(text, it, T("没讲成：", "Failed: ") + e.message); });
   }
-  function learnSel(text, host){
+  function learnSel(text, host, nth){
     openCard(text);
     var sel = window.getSelection(); if (sel) sel.removeAllRanges();
-    ask(text, host, null, false);
+    ask(text, host, null, false, nth);
   }
   // 点下划线：出历史卡片，不出选中小条；双击选词、拖选时不出卡片
   var lrnTimer = null;
@@ -1608,6 +1651,7 @@ def render_l2(meta, modes, css_href, reader_href):
 <html lang="zh" data-theme="warm">
 <head>
 <meta charset="utf-8">
+<script src="%(lock)s" data-key="paper-vault" data-api="/api/lock"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%(title)s</title>
 %(fonts)s
@@ -1642,7 +1686,7 @@ def render_l2(meta, modes, css_href, reader_href):
 <script src="%(reader)s"></script>
 </body>
 </html>""" % {
-        "title": title, "fonts": GOOGLE_FONTS, "css": css_href,
+        "title": title, "fonts": GOOGLE_FONTS, "css": css_href, "lock": css_href.rsplit("/", 1)[0] + "/lock.js",
         "tbmeta": tb_meta, "urllink": url_link,
         "modeseg": modeseg, "langseg": langseg,
         "modes": modes_html, "reader": reader_href,
@@ -1769,6 +1813,7 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <html lang="zh" data-theme="warm">
 <head>
 <meta charset="utf-8">
+<script src="%(lock)s" data-key="paper-vault" data-api="/api/lock"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>潜研堂 · Lyceum Hall</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -1791,7 +1836,7 @@ def render_l1(papers, css_href, library_href, tree=None, favorites=None, reading
 <script src="%(library)s"></script>
 </body>
 </html>""" % {
-        "css": css_href, "count": len(papers),
+        "css": css_href, "lock": css_href.rsplit("/", 1)[0] + "/lock.js", "count": len(papers),
         "chips": chips, "groups": groups_html, "library": library_href,
     }
 
