@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -111,6 +112,13 @@ _notes_lock = threading.Lock()
 # 开了以后监听 0.0.0.0；本机直接用，别的设备第一次要输密码，之后记住一年；连错 8 次锁 10 分钟。
 LAN_FILE = ROOT / "lan.local.json"
 LAN_COOKIE = "pv_pin"
+# 离开就锁（设计见 praxis-academy/docs/lock-on-leave.md）：页面调 POST /api/lock 把这台设备标成已锁（cookie pv_locked），
+# 已锁的设备连本机也要输密码；别的程序从本机调接口不带这个 cookie，照旧放行。没设密码时不生效。
+LOCKED_COOKIE = "pv_locked"   # 不带 Secure：本机纯 http 下也要生效
+
+
+def locked_cookie(on):
+    return "%s=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=Strict" % (LOCKED_COOKIE, "1" if on else "", 31536000 if on else 0)
 
 
 def load_lan():
@@ -466,8 +474,8 @@ def learn_list(slug):
     return [public_item(v) for v in load_learn()["items"].values() if v.get("slug") == slug and not v.get("deleted")]
 
 
-def learn(slug, mode, section, text, context, again=False):
-    """返回 (记录, 是否新调了模型, 用量)。"""
+def learn(slug, mode, section, text, context, again=False, nth=None):
+    """返回 (记录, 是否新调了模型, 用量)。nth：选中的是这一小节里这段文字的第几处（从 0 起），下划线画在那一处。"""
     text = norm_text(text)
     lid = learn_id(slug, text)
     with _busy_lock:
@@ -499,6 +507,9 @@ def learn(slug, mode, section, text, context, again=False):
                 for e in it.get("entries", []):
                     e["deleted"] = True
                 it.update(deleted=False, mode=mode, section=section)
+                it.pop("nth", None)          # 位置跟着这次选中重记
+            if nth is not None:              # 没带 nth（旧页面、从卡片再讲一次）就不动已有的
+                it["nth"] = nth
             it["entries"].append(entry)
             it["updated_at"] = now
             write_json(LEARN, d)
@@ -531,9 +542,11 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
-    def reply(self, code, obj):
+    def reply(self, code, obj, cookies=()):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
+        for c in cookies:               # 一个响应发几个 cookie 就调几次，不能合并成一行
+            self.send_header("Set-Cookie", c)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -572,12 +585,21 @@ class Handler(SimpleHTTPRequestHandler):
     def lan_gate(self):
         """True = 放行；False = 已经回了登录页 / 401 / 429。"""
         ip = self.client_address[0]
-        if ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1") or not LAN:
-            return True
+        local = ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
         cookies = dict(c.strip().split("=", 1) for c in (self.headers.get("Cookie") or "").split(";") if "=" in c)
-        if cookies.get(LAN_COOKIE) == LAN_TOKEN:
-            return True
+        locked = bool(LAN) and bool(cookies.get(LOCKED_COOKIE))
         path = self.path.split("?")[0]
+        # 离开就锁：GET 问「有没有这个功能、这台设备锁没锁」；POST 锁上（只动发请求的这台设备自己的 cookie，谁都可以调）
+        if path == "/api/lock":
+            if self.command == "POST" and LAN:
+                self.reply(200, {"on": True, "locked": True}, [locked_cookie(True), "%s=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict" % LAN_COOKIE])
+            else:
+                self.reply(200, {"on": bool(LAN), "locked": locked})
+            return False
+        if not LAN or (local and not locked):
+            return True
+        if not locked and cookies.get(LAN_COOKIE) == LAN_TOKEN:
+            return True
         if self.command == "POST" and path == "/api/lan-login":
             f = _fails.get(ip, [0, 0])
             if f[1] > time.time():
@@ -589,12 +611,13 @@ class Handler(SimpleHTTPRequestHandler):
                 got = ""
             if got == str(LAN["pin"]):
                 _fails.pop(ip, None)
-                body = b'{"ok": true}'
-                self.send_response(200)
-                self.send_header("Set-Cookie", "%s=%s; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict" % (LAN_COOKIE, LAN_TOKEN))
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers(); self.wfile.write(body)
+                # 局域网设备照旧发密码 cookie；已锁的清掉标记
+                out = []
+                if not local:
+                    out.append("%s=%s; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict" % (LAN_COOKIE, LAN_TOKEN))
+                if locked:
+                    out.append(locked_cookie(False))
+                self.reply(200, {"ok": True}, out)
                 return False
             f[0] += 1
             if f[0] >= 8:
@@ -690,14 +713,17 @@ class Handler(SimpleHTTPRequestHandler):
             text, context = norm_text(data.get("text") if isinstance(data.get("text"), str) else ""), data.get("context") or ""
             if not (isinstance(slug, str) and re.fullmatch(r"[\w.-]+", slug) and (ROOT / "papers" / slug).is_dir()):
                 return self.reply(400, {"error": "bad slug"})
+            nth = data.get("nth")
             if mode not in ("skim", "grasp", "master") or not isinstance(section, str) or not isinstance(context, str):
                 return self.reply(400, {"error": "bad fields"})
+            if nth is not None and (not isinstance(nth, int) or isinstance(nth, bool) or not 0 <= nth <= 100000):
+                return self.reply(400, {"error": "bad nth"})
             if not text:
                 return self.reply(400, {"error": "没有选中文字"})
             if len(text) > LEARN_MAX:
                 return self.reply(400, {"error": "选得太长了（超过 %d 个字符），一次讲一个点" % LEARN_MAX})
             try:
-                item, fresh, usage = learn(slug, mode, section[:300], text, context[:20000], bool(data.get("again")))
+                item, fresh, usage = learn(slug, mode, section[:300], text, context[:20000], bool(data.get("again")), nth)
             except PermissionError as e:
                 return self.reply(409, {"error": str(e)})
             except subprocess.TimeoutExpired:
@@ -729,8 +755,12 @@ class Handler(SimpleHTTPRequestHandler):
         return self.reply(404, {"error": "not found"})
 
     def log_message(self, fmt, *args):
-        if self.command == "POST":
-            super().log_message(fmt, *args)
+        # pythonw 启动又没重定向输出时 sys.stderr 是 None：写日志会出错，数据存了页面却收不到回应。没有标准错误就不写。
+        if self.command == "POST" and sys.stderr is not None:
+            try:
+                super().log_message(fmt, *args)
+            except Exception:
+                pass
 
 
 def main():
