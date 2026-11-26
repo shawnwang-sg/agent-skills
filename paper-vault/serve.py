@@ -9,6 +9,11 @@
   GET  /api/notes          读全部章节概括
   POST /api/notes          保存一条章节概括（不评分）→ notes.json（默认在 ~/OneDrive/self-meta/paper-vault/，可用环境变量 PAPER_VAULT_META 改）
   POST /api/judge          保存概括并调用本机已登录的 claude CLI 打分（1–10）和点评 → notes.json
+  GET  /api/learn?slug=    这篇论文的学习记录（没删的）
+  POST /api/learn          选中即学：{slug, mode, section, text, context, again}；有存档且 again 不为真直接返回存档，
+                           否则调引擎讲一次、追加一项 → learn.json（和 notes.json 同一个个人 meta 文件夹）
+  POST /api/learn/delete   {id}：标记为已删（不真删）
+  GET/POST /api/engine     读 / 改「学习」用的引擎（claude、codex）→ vault 里的 engine.local.json（不进 Git）
   GET/POST /api/coach/...  转发给雅言堂（lang-coach）的 /api/collect 系列接口
 """
 import argparse
@@ -16,11 +21,13 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -65,12 +72,17 @@ def bump_meta():
         except Exception:
             old = {}
         tables = {}
-        for name in ("notes", "folders"):
+        for name in ("notes", "folders", "learn"):
             fp = META_DIR / ("%s.json" % name)
             if fp.exists():
                 b = fp.read_bytes()
                 d = json.loads(b.decode("utf-8"))
-                rows = sum(len(v) for v in d.get("summaries", {}).values()) if name == "notes" else len(d.get("favorites", [])) + len(d.get("reading", []))
+                if name == "notes":
+                    rows = sum(len(v) for v in d.get("summaries", {}).values())
+                elif name == "learn":
+                    rows = sum(1 for v in d.get("items", {}).values() if not v.get("deleted"))
+                else:
+                    rows = len(d.get("favorites", [])) + len(d.get("reading", []))
                 tables[name] = {"rows": rows, "hash": "sha256:" + _h.sha256(b).hexdigest()}
         meta = {"format": "paper-vault-meta", "version": 1, "schema": META_SCHEMA, "owner": owner_id() or old.get("owner"),
                 "revision": int(old.get("revision") or 0) + 1, "base": int(old.get("revision") or 0),
@@ -254,6 +266,261 @@ def judge(slug, mode, sec, title, summary):
     return res
 
 
+# ── 学习（选中即学）────────────────────────────────────────────────────────
+# 提示词和讲解格式在 skill paper-explain（prompts/ 是唯一来源）；规格见 LEARN-SPEC.md。
+# 记录存在个人 meta 文件夹的 learn.json：items[id]，id = slug + 规整后文字的哈希；entries 按时间先后追加。
+LEARN = META_DIR / "learn.json"
+LEARN_MAX = 500          # 选中超过 500 个字符不讲
+LEARN_CTX = 900          # 上下文以选中为中心截到约 900 个字符
+LEARN_TIMEOUT = 60
+PROMPT_DIRS = [ROOT / "plugins" / "paper-vault" / "skills" / "paper-explain" / "prompts",
+               Path(__file__).resolve().parent.parent / "paper-explain" / "prompts"]   # vault 里 / skill 仓库里
+_learn_lock = threading.Lock()
+_busy_lock = threading.Lock()
+_busy = {}               # id → Lock：同一段文字同时只跑一个请求
+
+
+def norm_text(s):
+    return re.sub(r"\s+", " ", s or "").strip()
+
+
+def learn_id(slug, text):
+    return "%s:%s" % (slug, hashlib.sha1(norm_text(text).encode("utf-8")).hexdigest()[:16])
+
+
+def learn_kind(text):
+    return "word" if len(norm_text(text).split(" ")) <= 3 else "sentence"
+
+
+def load_prompt(kind):
+    """返回 (系统提示词, 版本号)。"""
+    for d in PROMPT_DIRS:
+        f = d / ("word.txt" if kind == "word" else "sentence.txt")
+        if f.exists():
+            try:
+                ver = int((d / "version.txt").read_text(encoding="utf-8").strip())
+            except Exception:
+                ver = 0
+            return f.read_text(encoding="utf-8").strip(), ver
+    raise RuntimeError("找不到 paper-explain 的提示词（prompts/）")
+
+
+def clip_context(ctx, text, limit=LEARN_CTX):
+    """上下文规整成一行，以选中为中心截到 limit 个字符。"""
+    ctx, text = norm_text(ctx), norm_text(text)
+    if len(ctx) <= limit:
+        return ctx
+    i = ctx.find(text)
+    if i < 0:
+        return ctx[:limit]
+    start = max(0, min(i + len(text) // 2 - limit // 2, len(ctx) - limit))
+    return ctx[start:start + limit]
+
+
+def paper_title(slug):
+    try:
+        return json.loads((ROOT / "papers" / slug / "paper.json").read_text(encoding="utf-8"))["meta"].get("title") or slug
+    except Exception:
+        return slug
+
+
+def learn_input(slug, section, context, text):
+    """给模型的四行输入，别的不带。"""
+    return "论文：%s\n小节：%s\n上下文：%s\n选中：%s" % (
+        norm_text(paper_title(slug)), norm_text(section) or "（无）", clip_context(context or text, text), norm_text(text))
+
+
+# 引擎：engine(system, user, timeout) → {"text", "model", "usage": {"input", "output"}}。加引擎只加一个函数，再登记到 ENGINES。
+def engine_claude(system, user, timeout):
+    cmd = ["claude", "-p", "--model", "sonnet", "--effort", "low", "--system-prompt", system,
+           "--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "",
+           "--disable-slash-commands", "--no-session-persistence", "--output-format", "json"]
+    r = subprocess.run(cmd, input=user, capture_output=True, text=True, encoding="utf-8",
+                       timeout=timeout, cwd=tempfile.gettempdir())
+    if r.returncode:
+        raise RuntimeError((r.stderr or r.stdout or "claude 调用失败")[-300:])
+    d = json.loads(r.stdout)
+    if d.get("is_error"):
+        raise RuntimeError(str(d.get("result") or "claude 返回错误")[-300:])
+    u = d.get("usage") or {}
+    models = list((d.get("modelUsage") or {}).keys())
+    return {"text": (d.get("result") or "").strip(), "model": models[0] if models else "sonnet",
+            "usage": {"input": int(u.get("input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+                      + int(u.get("cache_read_input_tokens") or 0),
+                      "output": int(u.get("output_tokens") or 0)}}
+
+
+def engine_codex(system, user, timeout):
+    """Codex 命令行（codex exec 非交互）。没有单独的系统提示词参数：提示词和四行输入一起走标准输入。"""
+    exe = shutil.which("codex")
+    cmd = [exe, "exec", "--skip-git-repo-check", "--sandbox", "read-only", "-c", 'model_reasoning_effort="low"', "--json", "-"]
+    r = subprocess.run(cmd, input=system + "\n\n" + user, capture_output=True, text=True, encoding="utf-8",
+                       timeout=timeout, cwd=tempfile.gettempdir())
+    if r.returncode:
+        raise RuntimeError((r.stderr or r.stdout or "codex 调用失败")[-300:])
+    text, usage, model = "", {}, "codex"
+    for line in r.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        item = ev.get("item") or {}
+        if item.get("type") == "agent_message" and item.get("text"):
+            text = item["text"]
+        if ev.get("usage"):
+            usage = ev["usage"]
+        model = ev.get("model") or model
+    return {"text": text.strip(), "model": model,
+            "usage": {"input": int(usage.get("input_tokens") or 0), "output": int(usage.get("output_tokens") or 0)}}
+
+
+FAKE_CALLS = []          # 假引擎被调用的记录（测试看它判断有没有调模型）
+
+
+def engine_fake(system, user, timeout):
+    """只给测试用：环境变量 PAPER_VAULT_FAKE_ENGINE=1 时才有，界面上不出现。PAPER_VAULT_FAKE_DELAY 可设秒数。"""
+    FAKE_CALLS.append(user)
+    time.sleep(float(os.environ.get("PAPER_VAULT_FAKE_DELAY") or 0))
+    sel = user.rsplit("选中：", 1)[-1][:40]
+    n = len(FAKE_CALLS)
+    if "五行" in system:
+        text = ("是什么：假引擎第 %d 次讲「%s」。\n为什么：测试用。\n在这里：测试用。\n翻译：测试\n搭配：fake engine" % (n, sel))
+    else:
+        text = ("大意：假引擎第 %d 次讲这句。\n前因：测试用。\n理解：「%s」。\n后果：测试用。\n关键：fake：假的；test：测试\n"
+                "翻译：测试。\n句型：无\n这一行没有标签，原样显示。" % (n, sel))
+    return {"text": text, "model": "fake", "usage": {"input": len(system + user) // 2, "output": len(text) // 2}}
+
+
+ENGINES = {"claude": (engine_claude, lambda: bool(shutil.which("claude"))),
+           "codex": (engine_codex, lambda: bool(shutil.which("codex"))),
+           "fake": (engine_fake, lambda: os.environ.get("PAPER_VAULT_FAKE_ENGINE") == "1")}
+HIDDEN_ENGINES = ("fake",)
+
+
+def engine_file():
+    return ROOT / "engine.local.json"
+
+
+def engine_options():
+    """界面上可选的引擎（本机装了的）。"""
+    return [k for k, (_, ok) in ENGINES.items() if k not in HIDDEN_ENGINES and ok()]
+
+
+def current_engine():
+    try:
+        name = json.loads(engine_file().read_text(encoding="utf-8")).get("engine")
+    except Exception:
+        name = None
+    if name in ENGINES and ENGINES[name][1]():
+        return name
+    if ENGINES["fake"][1]():         # 打开了假引擎（测试）：没选过就用它，免得误调真模型
+        return "fake"
+    opts = engine_options()
+    return opts[0] if opts else "claude"
+
+
+def set_engine(name):
+    if name not in ENGINES or not ENGINES[name][1]():
+        raise ValueError("没有这个引擎：%s" % name)
+    f = engine_file()
+    tmp = f.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"engine": name}, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, f)
+
+
+def call_engine(name, system, user):
+    """输出为空或命令失败才重试一次；超时不重试。格式不齐照原样返回。"""
+    fn = ENGINES[name][0]
+    err = None
+    for _ in range(2):
+        try:
+            res = fn(system, user, LEARN_TIMEOUT)
+            if res.get("text"):
+                return res
+            err = RuntimeError("模型没有输出")
+        except subprocess.TimeoutExpired:
+            raise
+        except Exception as e:
+            err = e
+    raise err
+
+
+def load_learn():
+    try:
+        d = json.loads(LEARN.read_text(encoding="utf-8"))
+        if isinstance(d.get("items"), dict):
+            return d
+    except Exception:
+        pass
+    return {"version": 1, "items": {}}
+
+
+def public_item(it):
+    """给页面看的记录：去掉已删的项。"""
+    out = dict(it)
+    out["entries"] = [e for e in it.get("entries", []) if not e.get("deleted")]
+    return out
+
+
+def learn_list(slug):
+    return [public_item(v) for v in load_learn()["items"].values() if v.get("slug") == slug and not v.get("deleted")]
+
+
+def learn(slug, mode, section, text, context, again=False):
+    """返回 (记录, 是否新调了模型, 用量)。"""
+    text = norm_text(text)
+    lid = learn_id(slug, text)
+    with _busy_lock:
+        lk = _busy.setdefault(lid, threading.Lock())
+    waited = not lk.acquire(blocking=False)
+    if waited:                       # 同一段文字已经在讲：等它讲完，直接用它的结果
+        lk.acquire()
+    try:
+        it = load_learn()["items"].get(lid)
+        if it and not it.get("deleted") and it.get("entries") and (waited or not again):
+            return public_item(it), False, None
+        if owner_mismatch():
+            raise PermissionError("个人 meta 文件夹属于另一个人，没有写入")
+        kind = learn_kind(text)
+        system, ver = load_prompt(kind)
+        name = current_engine()
+        res = call_engine(name, system, learn_input(slug, section, context, text))
+        now = time.strftime("%Y-%m-%d %H:%M")
+        entry = {"at": now, "engine": name, "model": res.get("model") or name, "prompt": ver,
+                 "body": res["text"], "usage": res.get("usage") or {}}
+        LEARN.parent.mkdir(parents=True, exist_ok=True)
+        with _learn_lock:
+            d = load_learn()
+            it = d["items"].get(lid)
+            if not it:
+                it = d["items"][lid] = {"id": lid, "slug": slug, "mode": mode, "section": section, "kind": kind,
+                                        "text": text, "entries": [], "created_at": now, "updated_at": now, "deleted": False}
+            elif it.get("deleted"):          # 删过又学：旧的几项仍算已删，不再显示
+                for e in it.get("entries", []):
+                    e["deleted"] = True
+                it.update(deleted=False, mode=mode, section=section)
+            it["entries"].append(entry)
+            it["updated_at"] = now
+            write_json(LEARN, d)
+        bump_meta()
+        return public_item(it), True, entry["usage"]
+    finally:
+        lk.release()
+
+
+def learn_delete(lid):
+    with _learn_lock:
+        d = load_learn()
+        it = d["items"].get(lid)
+        if not it:
+            return False
+        it["deleted"] = True
+        it["updated_at"] = time.strftime("%Y-%m-%d %H:%M")
+        write_json(LEARN, d)
+    bump_meta()
+    return True
+
+
 class Handler(SimpleHTTPRequestHandler):
     coach = COACH
 
@@ -354,6 +621,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self.proxy_coach(self.path[len("/api/coach/"):])
         if self.path.split("?")[0] == "/api/notes":
             return self.reply(200, load_notes())
+        if self.path.split("?")[0] == "/api/learn":
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            slug = (q.get("slug") or [""])[0]
+            if not re.fullmatch(r"[\w.-]+", slug):
+                return self.reply(400, {"error": "bad slug"})
+            return self.reply(200, {"items": learn_list(slug)})
+        if self.path.split("?")[0] == "/api/engine":
+            return self.reply(200, {"engine": current_engine(), "options": engine_options()})
         if self.path.split("?")[0] in ("/api/folders", "/folders.json"):
             try:
                 return self.reply(200, json.loads(FOLDERS.read_text(encoding="utf-8")))
@@ -394,6 +669,42 @@ class Handler(SimpleHTTPRequestHandler):
             write_json(FOLDERS, {"version": 1, "favorites": lists["favorites"], "reading": lists["reading"], "tree": data["tree"]})
             bump_meta()
             return self.reply(200, {"ok": True})
+
+        if path == "/api/engine":
+            try:
+                set_engine(data.get("engine"))
+            except ValueError as e:
+                return self.reply(400, {"error": str(e)})
+            return self.reply(200, {"engine": current_engine(), "options": engine_options()})
+
+        if path == "/api/learn/delete":
+            lid = data.get("id")
+            if not isinstance(lid, str) or len(lid) > 300:
+                return self.reply(400, {"error": "bad id"})
+            if owner_mismatch():
+                return self.reply(409, {"error": "个人 meta 文件夹属于另一个人，没有写入"})
+            return self.reply(200, {"ok": True}) if learn_delete(lid) else self.reply(404, {"error": "没有这条记录"})
+
+        if path == "/api/learn":
+            slug, mode, section = data.get("slug"), data.get("mode"), data.get("section") or ""
+            text, context = norm_text(data.get("text") if isinstance(data.get("text"), str) else ""), data.get("context") or ""
+            if not (isinstance(slug, str) and re.fullmatch(r"[\w.-]+", slug) and (ROOT / "papers" / slug).is_dir()):
+                return self.reply(400, {"error": "bad slug"})
+            if mode not in ("skim", "grasp", "master") or not isinstance(section, str) or not isinstance(context, str):
+                return self.reply(400, {"error": "bad fields"})
+            if not text:
+                return self.reply(400, {"error": "没有选中文字"})
+            if len(text) > LEARN_MAX:
+                return self.reply(400, {"error": "选得太长了（超过 %d 个字符），一次讲一个点" % LEARN_MAX})
+            try:
+                item, fresh, usage = learn(slug, mode, section[:300], text, context[:20000], bool(data.get("again")))
+            except PermissionError as e:
+                return self.reply(409, {"error": str(e)})
+            except subprocess.TimeoutExpired:
+                return self.reply(504, {"error": "讲解超时，再试一次"})
+            except Exception as e:
+                return self.reply(500, {"error": "讲解失败：%s" % e})
+            return self.reply(200, {"ok": True, "item": item, "cached": not fresh, "usage": usage})
 
         if path in ("/api/notes", "/api/judge") and owner_mismatch():
             return self.reply(409, {"error": "个人 meta 文件夹属于另一个人，没有写入"})
@@ -436,7 +747,7 @@ def main():
         for ip in lan_addresses():
             print("局域网：http://%s:%d/  （别的设备第一次打开要输密码）" % (ip, a.port))
     migrate_folders()
-    print("个人数据（章节概括、收藏、在读、分类树）存在：%s" % META_DIR)
+    print("个人数据（章节概括、学习记录、收藏、在读、分类树）存在：%s" % META_DIR)
     if not a.no_browser:
         webbrowser.open(url)
     try:
