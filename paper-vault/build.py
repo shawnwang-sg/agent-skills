@@ -431,6 +431,35 @@ body.cards-hidden .blk-qa.revealed .qa-reveal{display:none;}
 .pick{position:fixed; z-index:50; display:flex; gap:4px; padding:4px; border-radius:9px; background:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 .pick button{border:0; background:transparent; color:var(--page); font:13px var(--font-zh); padding:4px 10px; border-radius:6px; cursor:pointer;}
 .pick button:hover{background:rgba(255,255,255,.15);}
+.pick button.pk-learn{font-weight:700;}
+/* ── 学习：选中即学（宽屏靠右，窄屏贴底）── */
+.lrn{text-decoration:underline; text-decoration-color:var(--accent2); text-decoration-thickness:2px; text-underline-offset:3px; cursor:pointer;}
+.lrn:hover{text-decoration-color:var(--accent);}
+.lcard{position:fixed; z-index:2147483001; right:16px; top:64px; width:min(380px,calc(100vw - 32px)); max-height:calc(100vh - 128px);
+  display:flex; flex-direction:column; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:12px;
+  box-shadow:0 8px 28px rgba(0,0,0,.18); font:calc(14px*var(--read))/1.65 var(--font-zh);}
+.lc-head{display:flex; gap:6px; align-items:flex-start; padding:8px 6px 6px 14px; border-bottom:1px solid var(--line);}
+.lc-text{flex:1; color:var(--soft); font:13px/1.5 var(--font-en); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.lc-x{border:0; background:transparent; color:var(--soft); font-size:22px; line-height:1; cursor:pointer; padding:0 8px;}
+.lc-main{flex:1; overflow-y:auto; padding:6px 14px; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;}
+.lc-st{color:var(--soft); font-size:13px; padding:4px 0;}
+.lc-date{color:var(--soft); font-size:11px; margin:2px 0;}
+.lc-old{border-top:1px dashed var(--line); margin-top:6px; padding-top:2px;}
+.lc-old summary{cursor:pointer;}
+.lc-row{display:grid; grid-template-columns:3.6em 1fr; gap:6px; margin:2px 0;}
+.lc-k{color:var(--accent2); font-weight:700; font-size:12px; line-height:calc(23px*var(--read));}
+.lc-raw{margin:2px 0;}
+.lc-acts{display:flex; gap:8px; padding:6px 14px; border-top:1px solid var(--line);}
+.lc-acts:empty{display:none;}
+.lc-acts button{border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:8px; padding:3px 12px; font:13px var(--font-zh); cursor:pointer;}
+.lc-acts button:disabled{opacity:.55; cursor:wait;}
+.lc-acts .lc-del{margin-left:auto; color:var(--soft);}
+.lc-foot{padding:2px 14px 8px; color:var(--soft); font-size:11px;}
+.lc-foot select{font:11px var(--font-zh); color:var(--soft); background:transparent; border:1px solid var(--line); border-radius:6px;}
+@media (max-width:760px){
+  .lcard{left:0; right:0; bottom:0; top:auto; width:auto; max-height:60vh; border-radius:14px 14px 0 0; border-bottom:0;
+    padding-bottom:env(safe-area-inset-bottom);}
+}
 .toast{position:fixed; z-index:60; left:50%; bottom:70px; transform:translateX(-50%); max-width:min(560px,90vw);
   background:var(--ink); color:var(--page); padding:8px 16px; border-radius:10px; font:13px/1.6 var(--font-zh); box-shadow:0 4px 14px rgba(0,0,0,.25);}
 """
@@ -1203,25 +1232,168 @@ READER_JS = r"""
       })
       .catch(function(e){ toast(T("没收成：", "Not saved: ") + e.message); });
   }
+  var coarse = !!(window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+  function showPick(){
+    hidePick();
+    var sel = window.getSelection(), text = sel ? sel.toString().replace(/\s+/g, " ").trim() : "";
+    if (!text || text.length > 500 || !/[A-Za-z]/.test(text) || !sel.rangeCount) return;
+    var node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode);
+    var host = node && node.closest && node.closest(".page .en"); if (!host || node.closest(".mysum") || node.closest(".lcard")) return;
+    var rect = sel.getRangeAt(0).getBoundingClientRect(), words = text.split(" ").length;
+    pick = E("div", "pick");
+    var sentence = sentenceOf(host.textContent, text);
+    if (LEARN_ON) { var bl = E("button", "pk-learn", T("学习", "Learn")); bl.addEventListener("click", function(){ learnSel(text, host); }); pick.appendChild(bl); }
+    if (words <= 4) { var bw = E("button", "", T("＋ 收藏词", "＋ Save word")); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
+    var bsn = E("button", "", T("＋ 收藏句", "＋ Save sentence")); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
+    document.body.appendChild(pick);
+    pick.style.left = Math.max(8, Math.min(window.innerWidth - pick.offsetWidth - 8, rect.left + rect.width / 2 - pick.offsetWidth / 2)) + "px";
+    // 触屏上系统的选中菜单在上方，小条放到选区下面
+    pick.style.top = (coarse ? Math.min(window.innerHeight - pick.offsetHeight - 8, rect.bottom + 12) : Math.max(8, rect.top - pick.offsetHeight - 8)) + "px";
+  }
   if (served) document.addEventListener("mouseup", function(e){
-    if (e.target.closest && (e.target.closest(".pick") || e.target.closest(".mysum"))) return;
-    setTimeout(function(){
-      hidePick();
-      var sel = window.getSelection(), text = sel ? sel.toString().replace(/\s+/g, " ").trim() : "";
-      if (!text || text.length > 500 || !/[A-Za-z]/.test(text)) return;
-      var node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode);
-      var host = node && node.closest && node.closest(".page .en"); if (!host || node.closest(".mysum")) return;
-      var rect = sel.getRangeAt(0).getBoundingClientRect(), words = text.split(" ").length;
-      pick = E("div", "pick");
-      var sentence = sentenceOf(host.textContent, text);
-      if (words <= 4) { var bw = E("button", "", T("＋ 收藏词", "＋ Save word")); bw.addEventListener("click", function(){ collect("word", text, sentence); }); pick.appendChild(bw); }
-      var bsn = E("button", "", T("＋ 收藏句", "＋ Save sentence")); bsn.addEventListener("click", function(){ collect("sentence", words > 4 ? text : sentence, sentence); }); pick.appendChild(bsn);
-      document.body.appendChild(pick);
-      pick.style.left = Math.max(8, Math.min(window.innerWidth - pick.offsetWidth - 8, rect.left + rect.width / 2 - pick.offsetWidth / 2)) + "px";
-      pick.style.top = Math.max(8, rect.top - pick.offsetHeight - 8) + "px";
-    }, 0);
+    if (e.target.closest && (e.target.closest(".pick") || e.target.closest(".mysum") || e.target.closest(".lcard"))) return;
+    setTimeout(showPick, 0);
   });
+  // 触屏长按选中不一定有 mouseup：选区停下来半秒后出小条
+  var selT = null;
+  if (served && coarse) document.addEventListener("selectionchange", function(){ clearTimeout(selT); selT = setTimeout(showPick, 500); });
   document.addEventListener("scroll", hidePick, true);
+
+  // ── 学习：选中即学（serve.py 的 /api/learn 调本机引擎讲，记录在个人 meta 的 learn.json）──
+  // 讲过的文字加下划线（靠文字在英文原文里定位，先找同一小节）；点下划线出卡片看历史。
+  var LEARN_ON = false, LEARNED = {}, lcard = null, lcardText = "";
+  var LABELS = ["大意", "前因", "理解", "后果", "关键", "翻译", "句型", "是什么", "为什么", "在这里", "搭配"];
+  function secTitle(page){ return ((page && page.getAttribute("data-toc-en")) || "").replace(/\s*\(\d+\/\d+\)$/, ""); }
+  function jpost(url, body){
+    return fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(d){ if (!r.ok) throw new Error(d.error || r.status); return d; }); });
+  }
+  function textMap(el){
+    // 元素里的文字按「空白合并」排成一串，记下每个字符落在哪个文本节点的第几位
+    var s = "", map = [], sp = true, w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n;
+    while ((n = w.nextNode())) {
+      var v = n.nodeValue;
+      for (var i = 0; i < v.length; i++) {
+        if (/\s/.test(v[i])) { if (sp) continue; s += " "; sp = true; } else { s += v[i]; sp = false; }
+        map.push([n, i]);
+      }
+    }
+    return {s: s, map: map};
+  }
+  function markIn(el, text, id){
+    var tm = textMap(el), i = tm.s.indexOf(text); if (i < 0) return false;
+    var a = tm.map[i], b = tm.map[i + text.length - 1], segs = [], on = false, n;
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while ((n = w.nextNode())) {
+      if (n === a[0]) on = true;
+      if (on) segs.push([n, n === a[0] ? a[1] : 0, n === b[0] ? b[1] + 1 : n.nodeValue.length]);
+      if (n === b[0]) break;
+    }
+    segs.forEach(function(g){
+      if (g[2] <= g[1] || !/\S/.test(g[0].nodeValue.slice(g[1], g[2]))) return;
+      var r = document.createRange(); r.setStart(g[0], g[1]); r.setEnd(g[0], g[2]);
+      var u = E("span", "lrn"); u.setAttribute("data-lid", id); r.surroundContents(u);
+    });
+    return true;
+  }
+  function lrnSel(id){ return '.lrn[data-lid="' + id.replace(/["\\]/g, "\\$&") + '"]'; }
+  function underline(it){
+    if (document.querySelector(lrnSel(it.id))) return;
+    var all = Array.prototype.slice.call(document.querySelectorAll(".mode .page .en"));
+    function inMode(el){ return el.closest(".mode").getAttribute("data-mode") === it.mode; }
+    var tiers = [all.filter(function(el){ return inMode(el) && secTitle(el.closest(".page")) === it.section; }), all.filter(inMode), all];
+    for (var t = 0; t < tiers.length; t++)
+      for (var k = 0; k < tiers[t].length; k++) if (markIn(tiers[t][k], it.text, it.id)) return;
+  }
+  function unmark(id){
+    document.querySelectorAll(lrnSel(id)).forEach(function(u){
+      var p = u.parentNode; while (u.firstChild) p.insertBefore(u.firstChild, u); p.removeChild(u); p.normalize();
+    });
+  }
+  function renderBody(body){
+    // 按行首标签拆成小标题加正文；不认识的行原样显示
+    var box = E("div", "lc-body");
+    String(body || "").split(/\r?\n/).forEach(function(line){
+      if (!line.trim()) return;
+      var m = line.match(/^\s*([^：:]{1,4})[：:]\s*([\s\S]*)$/);
+      if (m && LABELS.indexOf(m[1].trim()) >= 0) {
+        var row = E("div", "lc-row"); row.appendChild(E("span", "lc-k", m[1].trim())); row.appendChild(E("span", "lc-v", m[2])); box.appendChild(row);
+      } else box.appendChild(E("div", "lc-raw", line));
+    });
+    return box;
+  }
+  function closeCard(){ if (lcard) { lcard.remove(); lcard = null; lcardText = ""; } }
+  function engineFoot(foot){
+    foot.appendChild(document.createTextNode(T("引擎 ", "Engine ")));
+    var sel = E("select", "lc-eng"); foot.appendChild(sel);
+    fetch("../../api/engine", {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(d){
+      var opts = (d.options || []).slice(); if (opts.indexOf(d.engine) < 0) opts.unshift(d.engine);
+      opts.forEach(function(o){ var op = E("option", "", o); op.value = o; sel.appendChild(op); });
+      sel.value = d.engine;
+    }).catch(function(){});
+    sel.addEventListener("change", function(){
+      jpost("../../api/engine", {engine: sel.value}).then(function(d){ sel.value = d.engine; })
+        .catch(function(e){ toast(T("没切成：", "Not switched: ") + e.message); });
+    });
+  }
+  function openCard(text){
+    closeCard(); hidePick();
+    lcard = E("div", "lcard"); lcard.setAttribute("role", "dialog"); lcardText = text;
+    var head = E("div", "lc-head"); head.appendChild(E("div", "lc-text", text));
+    var x = E("button", "lc-x", "×"); x.title = T("关闭", "Close"); x.addEventListener("click", closeCard); head.appendChild(x);
+    lcard.appendChild(head); lcard.appendChild(E("div", "lc-main")); lcard.appendChild(E("div", "lc-acts"));
+    var foot = E("div", "lc-foot"); engineFoot(foot); lcard.appendChild(foot);
+    document.body.appendChild(lcard);
+  }
+  function renderCard(text, it, status){
+    if (!lcard || lcardText !== text) return;      // 卡片已关或换了别的文字
+    var main = lcard.querySelector(".lc-main"), acts = lcard.querySelector(".lc-acts");
+    main.innerHTML = ""; acts.innerHTML = "";
+    if (status) main.appendChild(E("div", "lc-st", status));
+    (it ? it.entries.slice().reverse() : []).forEach(function(e, i){
+      var meta = e.at + (e.engine ? " · " + e.engine : "");
+      var box = i ? E("details", "lc-entry lc-old") : E("div", "lc-entry");
+      box.appendChild(E(i ? "summary" : "div", "lc-date", meta)); box.appendChild(renderBody(e.body)); main.appendChild(box);
+    });
+    if (!it) return;
+    var ba = E("button", "", T("再讲一次", "Explain again")), bd = E("button", "lc-del", T("删除", "Delete"));
+    ba.disabled = bd.disabled = !!status;
+    ba.addEventListener("click", function(){ ask(text, null, it, true); });
+    bd.addEventListener("click", function(){
+      bd.disabled = true;
+      jpost("../../api/learn/delete", {id: it.id}).then(function(){
+        unmark(it.id); delete LEARNED[it.id]; closeCard(); toast(T("已删除", "Deleted"));
+      }).catch(function(e){ bd.disabled = false; toast(T("没删成：", "Not deleted: ") + e.message); });
+    });
+    acts.appendChild(ba); acts.appendChild(bd);
+  }
+  function ask(text, host, it, again){
+    var page = host ? host.closest(".page") : null;
+    var body = it ? {slug:SLUG, mode:it.mode, section:it.section, text:text, context:"", again:true}
+                  : {slug:SLUG, mode:page.closest(".mode").getAttribute("data-mode"), section:secTitle(page), text:text, context:host.textContent, again:!!again};
+    if (it) { var ctxEl = document.querySelector(lrnSel(it.id)); if (ctxEl) body.context = ctxEl.closest(".en").textContent; }
+    renderCard(text, it, T("正在讲…", "Explaining…"));
+    jpost("../../api/learn", body).then(function(d){
+      LEARNED[d.item.id] = d.item; underline(d.item); renderCard(text, d.item);
+    }).catch(function(e){ renderCard(text, it, T("没讲成：", "Failed: ") + e.message); });
+  }
+  function learnSel(text, host){
+    openCard(text);
+    var sel = window.getSelection(); if (sel) sel.removeAllRanges();
+    ask(text, host, null, false);
+  }
+  // 点下划线：出历史卡片，不出选中小条；双击选词、拖选时不出卡片
+  var lrnTimer = null;
+  document.addEventListener("click", function(e){
+    var u = LEARN_ON && e.target.closest && e.target.closest(".lrn"); if (!u) return;
+    clearTimeout(lrnTimer); if (e.detail > 1) return;
+    lrnTimer = setTimeout(function(){
+      var s = window.getSelection(); if (s && !s.isCollapsed && s.toString().trim()) return;
+      var it = LEARNED[u.getAttribute("data-lid")]; if (!it) return;
+      openCard(it.text); renderCard(it.text, it);
+    }, 260);
+  });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeCard(); });
 
   // ── 初始化 ──
   var st=localStorage.getItem("pv_theme"); if (st && THEMES.indexOf(st)>=0) applyTheme(st);
@@ -1237,6 +1409,14 @@ READER_JS = r"""
   if (served) fetch("../../api/notes", {cache:"no-store"}).then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){ NOTES = (d && d.summaries) || {}; addSummaryBoxes(); }).catch(function(){ addSummaryBoxes(); });
   else addSummaryBoxes();
+  // 学习记录：接口在（serve.py 新版）才出「学习」和下划线
+  if (served && SLUG) fetch("../../api/learn?slug=" + encodeURIComponent(SLUG), {cache:"no-store"})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if (!d || !d.items) return;
+      LEARN_ON = true;
+      d.items.forEach(function(it){ LEARNED[it.id] = it; underline(it); });
+    }).catch(function(){});
 })();
 """
 
