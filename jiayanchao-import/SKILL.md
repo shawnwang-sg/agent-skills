@@ -15,7 +15,7 @@ description: 把名言、金句、摘抄批量加入用户本地拙勤堂（tort
 
 ## 步骤
 
-1. **找到数据文件**：脚本默认读拙勤堂绑定的个人 meta 文件夹里的 `data.json`（`C:\Users\Shugu\tortoise-hall\storage.local.json.meta.json` 的 `directory`）。`C:\Users\Shugu\tortoise-hall\data\` 是迁移前的旧副本，不要用。再看 `src/views/JiayanchaoView.tsx`、`src/domain/quotes.ts` 确认字段没变（`quotes[]` 的 `id/text/source/enabled`）。字段变了就先调整脚本再导入。
+1. **找到数据文件**：脚本默认读拙勤堂绑定的个人 meta 文件夹里的 `data.json`（`C:\Code\tortoise-hall\storage.local.json.meta.json` 的 `directory`）。`C:\Code\tortoise-hall\data\` 是迁移前的旧副本，不要用。再看 `src/views/JiayanchaoView.tsx`、`src/domain/quotes.ts` 确认字段没变（`quotes[]` 的 `id/text/source/enabled`）。字段变了就先调整脚本再导入。
 2. **先空跑看统计**：
    ```bash
    PYTHONIOENCODING=utf-8 python ~/.claude/skills/jiayanchao-import/scripts/import_quotes.py <输入> --source <来源名> --dry-run

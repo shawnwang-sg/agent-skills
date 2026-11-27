@@ -21,7 +21,7 @@ _output/（集锦 PDF、收藏清单等整理副产物，和阅读页无关，�
 import json, os
 from pathlib import Path
 
-DEFAULT_APP = r"F:\hive-pavilion"
+DEFAULT_APP = r"C:\Code\hive-pavilion"
 DEFAULT = {
     "title": "",            # 页面标题，空 = 「阅读 · <根目录名>」
     "subtitle": "视频转写稿 · 去口水词、改错字、不改原话",

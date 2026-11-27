@@ -8,7 +8,7 @@ description: 把一个本地视频收藏库（抖音、小红书……下载到�
 一个「库」= 一个根目录：下面是分类子文件夹（如抖音收藏夹分类 `F:\praxis-media\hive-pavilion\douyin\厉害\`）；还没归类的视频和图文放在 `_unsorted\`（算「未分类」tab，如 `F:\praxis-media\hive-pavilion\xiaohongshu\_unsorted\`；旧布局直接平铺在根目录的也兼容）；整理时的副产物（集锦 PDF、收藏清单等）放 `_output\`，脚本忽略。根目录只留分类文件夹、`_unsorted`、`_output`、`_yuedu`、`_pending` 等下划线开头的工作文件夹和 `yuedu.html`。视频文件名是「作者 - 标题.mp4」，图文是「作者 - 标题」文件夹（图片 + 正文.txt）。阅读页生成在根目录 `yuedu.html`，用相对路径播放本地视频，所以不能单独挪走。
 
 已有的库：
-- 博约阁在 `F:\hive-pavilion`（数据在 `data\`，个人资料另外导出到 self-meta 的 `hive-pavilion\`）；视频库单独放在 `F:\praxis-media\hive-pavilion\`（不在程序目录、也不在 self-meta 里；`F:\praxis-media\` 下一个工具一个文件夹）。D 盘和 C 盘的旧副本已删。
+- 博约阁在 `C:\Code\hive-pavilion`（数据在 `data\`，个人资料另外导出到 self-meta 的 `hive-pavilion\`）；视频库单独放在 `F:\praxis-media\hive-pavilion\`（不在程序目录、也不在 self-meta 里；`F:\praxis-media\` 下一个工具一个文件夹）。D 盘和 C 盘的旧副本已删。
 - `F:\praxis-media\hive-pavilion\douyin`（抖音收藏，5 个 tab：厉害、爱好、厉害文字、身体健康、美食），配置和规则在 `F:\praxis-media\hive-pavilion\douyin\_yuedu\`。
 - `F:\praxis-media\hive-pavilion\xiaohongshu`（小红书收藏，约 1100 个视频 + 40 多条图文，平铺）：5 个 tab 同抖音，大类和抖音对齐、用小主题区分；配置和规则在 `_yuedu\`，2026-11-10 整理完 1020 篇。英文 vlog 留作听力（爱好 / 八 / 英文 vlog 听力）。
 
@@ -44,7 +44,7 @@ description: 把一个本地视频收藏库（抖音、小红书……下载到�
 
 库的工作目录 `<根>/_yuedu/`：`config.json`、`rules.md`（这个库特有的规则）、`categories.json`（`{tab: {大类: [建议小主题]}}`，共用一套大类可写 `{"厉害文字": "厉害"}`）、`topic_list_<tab>.txt`、`topics.json`（小主题合并表 `{大类: {原: 合并后}}`）、`corrections.json`（用户指出的错字 `{id: [[原, 改成]]}`）、`todo/`、`done/`（文件名排后面的覆盖前面同 id 的结果）、`moves.json`。
 
-**博约阁**：`F:\hive-pavilion`（.claude/launch.json 里的 `hive-pavilion`，端口 8765）。它有「导入本地文件夹 · 只转文字」、跳过超长视频、本地挪动记录（relocated.json）这些功能，所有库都用它转写（数据库里按路径区分库）。小红书版 `C:\Users\Shugu\xhs-fav-study`（8766）没有本地导入功能，不用它转写。转写是 faster-whisper small、CPU，约 60 条/小时（短视频更快）。
+**博约阁**：`C:\Code\hive-pavilion`（.claude/launch.json 里的 `hive-pavilion`，端口 8765）。它有「导入本地文件夹 · 只转文字」、跳过超长视频、本地挪动记录（relocated.json）这些功能，所有库都用它转写（数据库里按路径区分库）。小红书版 `C:\Users\Shugu\xhs-fav-study`（8766）没有本地导入功能，不用它转写。转写是 faster-whisper small、CPU，约 60 条/小时（短视频更快）。
 
 ## 新建一个库（第一次）
 1. **建配置、看标题**：`python -X utf8 $S/init_lib.py --root F:\praxis-media\hive-pavilion\xiaohongshu --title "阅读 · 小红书收藏" --link-label 小红书原链接`。有分类文件夹的会自动当 tab；平铺的库看抽样标题，跟用户商量定 5～8 个 tab（`--tabs 职场,AI,美食,...`）。
