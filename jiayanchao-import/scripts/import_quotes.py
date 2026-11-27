@@ -24,7 +24,7 @@ def _bound_data():
         with open(r"C:\Users\Shugu\tortoise-hall\storage.local.json.meta.json", encoding="utf-8") as f:
             return os.path.join(json.load(f)["directory"], "data.json")
     except Exception:
-        return r"C:\Users\Shugu\OneDrive\self-meta\tortoise-hall\data.json"
+        return r"D:\self-meta\tortoise-hall\data.json"
 ap.add_argument("--data", default=_bound_data())
 ap.add_argument("--max", type=int, default=120)
 ap.add_argument("--dry-run", action="store_true", help="只统计，不写文件")
