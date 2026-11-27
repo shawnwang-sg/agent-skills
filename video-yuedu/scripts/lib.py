@@ -96,4 +96,4 @@ class Lib:
 
 
 def add_root_arg(ap):
-    ap.add_argument("--root", required=True, help=r"库的根目录，如 F:\video-library\douyin 或 F:\video-library\xiaohongshu")
+    ap.add_argument("--root", required=True, help=r"库的根目录，如 F:\video-library\hive-pavilion\douyin 或 F:\video-library\hive-pavilion\xiaohongshu")
