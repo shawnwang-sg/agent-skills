@@ -5,7 +5,7 @@ description: 把名言、金句、摘抄批量加入用户本地拙勤堂（tort
 
 # 导入拙勤堂嘉言钞
 
-嘉言钞是拙勤堂里轮播/展示名言的地方，数据存在个人 meta 的 `data.json` 的 `quotes` 数组（`C:\Users\Shugu\OneDrive\self-meta\tortoise-hall\data.json`；以程序目录 `storage.local.json.meta.json` 里绑定的文件夹为准，脚本默认就读它），每句是 `{"id", "text", "source", "enabled"}`。用户的要求只有一句「注意去掉重复的」，但背后有几件事要做对：
+嘉言钞是拙勤堂里轮播/展示名言的地方，数据存在个人 meta 的 `data.json` 的 `quotes` 数组（`D:\self-meta\tortoise-hall\data.json`；以程序目录 `storage.local.json.meta.json` 里绑定的文件夹为准，脚本默认就读它），每句是 `{"id", "text", "source", "enabled"}`。用户的要求只有一句「注意去掉重复的」，但背后有几件事要做对：
 
 - **去重要比字面更宽**：同一句话常有原文版和润色版、带不带出处、标点不同，都算重复。
 - **长段要拆**：嘉言钞的句子要能一眼读完，库里原有句子中位约 40 字、最长约 150 字，所以超过约 160 字的段落按句子拆成 ≤120 字左右的几句。
@@ -23,7 +23,7 @@ description: 把名言、金句、摘抄批量加入用户本地拙勤堂（tort
    输入可以是 quote-collection-publish 的 pages.json（会带上附录）、JSON 字符串列表或空行分隔的 txt。`--source` 一般填集锦标题，比如「厉害文字集锦」。
    看「整条重复 / 片段重复 / 新增」的数量和样例。重复率异常高或异常低（比如新增是 0，或几乎全部新增但用户说过以前导过）时，先抽几条核对再写。
 3. **正式写入**：去掉 `--dry-run` 再跑一次。脚本会自动备份到同目录 `backups/data.backup-<时间>.json`（`backups/` 不进 Git）。
-4. **核对**：`git -C C:\Users\Shugu\OneDrive\self-meta diff --stat tortoise-hall/data.json` 或和备份 diff，确认只有新增行、没有删除行。之后在拙勤堂顶栏「推送」把个人 meta 推上去。
+4. **核对**：`git -C D:\self-meta diff --stat tortoise-hall/data.json` 或和备份 diff，确认只有新增行、没有删除行。之后在拙勤堂顶栏「推送」把个人 meta 推上去。
 5. **提醒用户刷新**：拙勤堂平时开在 `http://localhost:5173`。要刷新页面才看得到新句子；页面里如果有没保存的改动，先保存再刷新，否则可能提示冲突或被覆盖。
 
 ## 汇报
