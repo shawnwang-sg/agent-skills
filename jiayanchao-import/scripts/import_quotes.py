@@ -21,7 +21,7 @@ ap.add_argument("--source", required=True, help="没有出处时填的来源名�
 def _bound_data():
     # 拙勤堂绑定的个人 meta 文件夹（self-meta 仓库里的 tortoise-hall/）
     try:
-        with open(r"C:\Users\Shugu\tortoise-hall\storage.local.json.meta.json", encoding="utf-8") as f:
+        with open(r"C:\Code\tortoise-hall\storage.local.json.meta.json", encoding="utf-8") as f:
             return os.path.join(json.load(f)["directory"], "data.json")
     except Exception:
         return r"D:\self-meta\tortoise-hall\data.json"
