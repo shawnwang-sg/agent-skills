@@ -21,7 +21,7 @@ _output/（集锦 PDF、收藏清单等整理副产物，和阅读页无关，�
 import json, os
 from pathlib import Path
 
-DEFAULT_APP = r"C:\Code\hive-pavilion"
+DEFAULT_APP = r"D:\praxis\praxis-framework\hive-pavilion"
 DEFAULT = {
     "title": "",            # 页面标题，空 = 「阅读 · <根目录名>」
     "subtitle": "视频转写稿 · 去口水词、改错字、不改原话",
@@ -120,4 +120,4 @@ class Lib:
 
 
 def add_root_arg(ap):
-    ap.add_argument("--root", required=True, help=r"库的根目录，如 F:\praxis-media\hive-pavilion\douyin 或 F:\praxis-media\hive-pavilion\xiaohongshu")
+    ap.add_argument("--root", required=True, help=r"库的根目录，如 F:\praxis\praxis-media\hive-pavilion\douyin 或 F:\praxis\praxis-media\hive-pavilion\xiaohongshu")
