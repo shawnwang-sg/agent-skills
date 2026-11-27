@@ -4,7 +4,7 @@
   python init_lib.py --root D:\\xiaohongshu --title "阅读 · 小红书收藏" [--tabs 职场,AI,美食] [--link-label 小红书原链接]
                      [--app F:\\hive-pavilion] [--app-url http://127.0.0.1:8765] [--sample 40]
 不给 --tabs 时：用根目录下「直接含视频文件」的子文件夹当 tab（图文笔记文件夹、_ 开头的、exclude 里的不算）。
-平铺的库（视频都直接放在根目录）没有分类文件夹：先看抽样标题，再用 --tabs 定几个 tab，润色时给每条定 tab，
+没有分类文件夹的库（视频都在 `_unsorted\\` 里，或旧布局直接放在根目录）：先看抽样标题，再用 --tabs 定几个 tab，润色时给每条定 tab，
 relocate.py 会把文件挪进对应的子文件夹。已有 config 时只更新给出的参数。
 """
 import argparse, collections, random, sys
@@ -24,9 +24,14 @@ def is_note_dir(d):
         and not any(f.is_dir() or f.suffix.lower() in VIDEO for f in fs)
 
 
-def scan(root):
-    """{文件夹名: [条目名...]}，根目录下直接放的算 ""。"""
+def scan(root, inbox_dir="_unsorted"):
+    """{文件夹名: [条目名...]}，_unsorted 里的和根目录下直接放的（旧布局）都算 ""。"""
     out = collections.defaultdict(list)
+    inbox = root / inbox_dir
+    if inbox.is_dir():
+        for q in inbox.iterdir():
+            if (q.is_file() and q.suffix.lower() in VIDEO) or (q.is_dir() and is_note_dir(q)):
+                out[""].append(q.stem if q.is_file() else q.name)
     for p in root.iterdir():
         if p.name.startswith(("_", ".")):
             continue
@@ -54,7 +59,7 @@ def main():
     ap.add_argument("--sample", type=int, default=40)
     a = ap.parse_args()
     lib = Lib(a.root)
-    found = scan(lib.root)
+    found = scan(lib.root, lib.cfg["inbox_dir"])
     for k, v in (("title", a.title), ("link_label", a.link_label), ("app", a.app), ("app_url", a.app_url), ("inbox", a.inbox)):
         if v:
             lib.cfg[k] = v
@@ -67,10 +72,10 @@ def main():
     lib.save()
     lib = Lib(a.root)
     print(f"配置：{lib.work / 'config.json'}")
-    print(f"标题：{lib.title}；博约阁：{lib.app}；tabs：{lib.tabs or '（还没定）'}；根目录下未分类的算「{lib.inbox}」")
+    print(f"标题：{lib.title}；博约阁：{lib.app}；tabs：{lib.tabs or '（还没定）'}；未分类（{lib.cfg['inbox_dir']} 里的，旧布局的根目录散放也算）归「{lib.inbox}」")
     random.seed(1)
     for k in sorted(found, key=lambda k: -len(found[k])):
-        name = k or f"（根目录，算「{lib.inbox}」）"
+        name = k or f"（{lib.cfg['inbox_dir']} / 根目录散放，算「{lib.inbox}」）"
         print(f"\n== {name}  {len(found[k])} 条" + ("  [exclude]" if k in lib.cfg["exclude"] else ""))
         for t in random.sample(found[k], min(a.sample, len(found[k]))):
             print("  ", t[:50])

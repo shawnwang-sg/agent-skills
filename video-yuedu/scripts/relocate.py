@@ -6,6 +6,7 @@
 - verdict=keep 且带 tab 字段、但文件还不在那个 tab 文件夹里（平铺的库：润色时顺便定 tab，再挪进去）。
 同步修改：博约阁数据库 items.local_path；博约阁 data/downloaded.json 里的旧路径；data/relocated.json 记新位置
 （hive-pavilion 的 downloaded_path 认这个记录，同步收藏夹时不会把文件再复制回原分类）。
+未归类的（_unsorted 文件夹里，或旧布局的根目录散放）挪进分类文件夹照常工作；--undo 按记录原路挪回（原来在 _unsorted 就回 _unsorted）。
 每笔挪动记到 <库>/_yuedu/moves.json，--undo 全部撤回。目标里已有同名文件时加「 (2)」，不覆盖。
 
 用法：python relocate.py --root D:\\douyin [--dry-run] [--export] [--undo]

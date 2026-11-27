@@ -5,7 +5,7 @@
 不复制、不移动、不改原文件。
 
 用法：python import_lib.py --root D:\\xiaohongshu [--folders 职场,美食] [--limit 200] [--no-notes]
-  --folders 默认 = 所有 tab + 根目录（inbox）；--limit 每个文件夹最多几条（按写入时间最早的几条）。
+  --folders 默认 = 所有 tab + 未归类（inbox：_unsorted，旧布局再加根目录散放的）；--limit 每个文件夹最多几条（按写入时间最早的几条）。
 """
 import argparse, json, sys, urllib.request
 from pathlib import Path
@@ -32,20 +32,25 @@ def main():
     names = [f for f in a.folders.split(",") if f] or lib.all_tabs()
     total = 0
     for name in names:
-        d = lib.root if name == lib.inbox else lib.root / name
-        if not d.is_dir():
+        if name == lib.inbox:   # 未归类：_unsorted（有的话）；旧布局根目录里还有散放的也一并扫
+            dirs = ([lib.inbox_dir] if lib.inbox_dir.is_dir() else []) + ([lib.root] if lib.has_loose() else [])
+        else:
+            dirs = [lib.root / name]
+        dirs = [d for d in dirs if d.is_dir()]
+        if not dirs:
             print(f"跳过 {name}：没有这个文件夹")
             continue
-        try:
-            r = post(f"{base}/api/import_folder", {"path": str(d), "limit": a.limit, "include_notes": not a.no_notes,
-                                                   "transcribe_only": True})
-        except Exception as e:
-            sys.exit(f"连不上博约阁 {base}（先把它打开）：{e}")
-        if r.get("error"):
-            print(f"{name}：{r['error']}")
-            continue
-        print(f"{name}：共 {r.get('total')} 条，新增 {r.get('added')}，已在博约阁 {r.get('existing')}")
-        total += r.get("added") or 0
+        for d in dirs:
+            try:
+                r = post(f"{base}/api/import_folder", {"path": str(d), "limit": a.limit, "include_notes": not a.no_notes,
+                                                       "transcribe_only": True})
+            except Exception as e:
+                sys.exit(f"连不上博约阁 {base}（先把它打开）：{e}")
+            if r.get("error"):
+                print(f"{name}（{d.name}）：{r['error']}")
+                continue
+            print(f"{name}（{d.name}）：共 {r.get('total')} 条，新增 {r.get('added')}，已在博约阁 {r.get('existing')}")
+            total += r.get("added") or 0
     print(f"新加入转写队列 {total} 条。之后跑 wait_new.py 等攒够 100 条再整理。")
 
 
